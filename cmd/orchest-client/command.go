@@ -18,7 +18,7 @@ type Command struct {
 
 func (c *Command) Execute() error {
 	//placeholder
-	fmt.Println("Handling Command of type: ", c.messageType)
+	fmt.Print("Handling Command of type: ", c.messageType, " | Payload:")
 	switch c.messageType {
 	case START_PROCESS_MESSAGE:
 		return startProcessMsg(c.payload)
@@ -31,11 +31,11 @@ func (c *Command) Execute() error {
 }
 
 func startProcessMsg(payload string) error {
-	fmt.Println(payload)
+	fmt.Print(payload)
 	return nil
 }
 
 func stopProcessMsg(payload string) error {
-	fmt.Println(payload)
+	fmt.Print(payload)
 	return nil
 }
