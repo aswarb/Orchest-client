@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	"orchest-client/cmd/orchest-client/api"
 )
 
 type Request interface {
@@ -41,7 +42,6 @@ func listener(sleeptime int64, requestChannel chan<- Request) {
 	fmt.Println("Listener Started")
 	replyChannel := make(chan Response)
 
-	//var arr []Command
 	for i := 0; i < 100; i++ {
 
 		t := START_PROCESS_MESSAGE
@@ -109,7 +109,7 @@ func queueManager(sleeptime int64, requestChannel <-chan Request) {
 }
 
 func main() {
-
+	args := os.Args[:1]
 	requestChannel := make(chan Request)
 
 	go listener(100, requestChannel)
@@ -119,6 +119,8 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	fmt.Println("Program is running. Press Ctrl+C to exit.")
+	fmt.Println(args)
+	go api.StartHttpApi(8080) //Should be a routine to prevent blocking
 	<-sigChan
 
 	fmt.Println("Shutdown signal received. Cleaning up...")
