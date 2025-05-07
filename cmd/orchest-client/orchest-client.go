@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	"orchest-client/cmd/orchest-client/api"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
-	"orchest-client/cmd/orchest-client/api"
 )
 
 type Request interface {
@@ -112,9 +112,9 @@ func main() {
 	args := os.Args[:1]
 	requestChannel := make(chan Request)
 
-	go listener(100, requestChannel)
-	go queueManager(100, requestChannel)
-	go consumer(100, requestChannel)
+	go listener(1000, requestChannel)
+	go queueManager(1000, requestChannel)
+	go consumer(1000, requestChannel)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 

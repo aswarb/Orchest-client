@@ -2,8 +2,9 @@ package api
 
 import (
 	"fmt"
-	"net/http"
+	"io"
 	"net"
+	"net/http"
 	"time"
 )
 
@@ -25,7 +26,7 @@ type NetMessage struct {
 type Listener interface {
 	getLocalAddr() net.Addr
 	getChannel() chan NetMessage
-	routine() 
+	routine()
 }
 
 type HttpListener struct {
@@ -38,6 +39,11 @@ func (listener HttpListener) getLocalAddr() net.Addr {
 }
 
 func httpRequestHandler(writer http.ResponseWriter, r *http.Request) {
+	fmt.Println(r)
+
+	bytes, _ := io.ReadAll(r.Body)
+	fmt.Println(string(bytes))
+
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	fmt.Fprintf(writer, `{"message":"orchest API is live!"}`)
@@ -46,7 +52,7 @@ func httpRequestHandler(writer http.ResponseWriter, r *http.Request) {
 func StartHttpApi(port uint) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/Orchest/api", httpRequestHandler)
+	mux.HandleFunc("/orchest/api", httpRequestHandler)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	fmt.Println(addr)
@@ -54,6 +60,6 @@ func StartHttpApi(port uint) {
 		Addr:    addr,
 		Handler: mux,
 	}
-	
+
 	server.ListenAndServe()
 }
