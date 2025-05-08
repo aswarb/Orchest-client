@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"orchest-client/cmd/orchest-client/api"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
+	//"sync"
 )
 
 type Request interface {
@@ -37,7 +41,7 @@ type Response struct {
 	ok      bool
 }
 
-func listener(sleeptime int64, requestChannel chan<- Request) {
+func listener(sleeptime int64, requestChannel chan<- Request, ctx context.Context) {
 
 	fmt.Println("Listener Started")
 	replyChannel := make(chan Response)
@@ -59,7 +63,7 @@ func listener(sleeptime int64, requestChannel chan<- Request) {
 
 }
 
-func consumer(sleeptime int64, requestChannel chan<- Request) {
+func consumer(sleeptime int64, requestChannel chan<- Request, ctx context.Context) {
 	replyChannel := make(chan Response)
 	requestChannel <- PopRequest{
 		reply: replyChannel,
@@ -75,7 +79,7 @@ func consumer(sleeptime int64, requestChannel chan<- Request) {
 	}
 }
 
-func queueManager(sleeptime int64, requestChannel <-chan Request) {
+func queueManager(sleeptime int64, requestChannel <-chan Request, ctx context.Context) {
 
 	var popQueue []PopRequest
 	var pushQueue []PushRequest
@@ -109,20 +113,46 @@ func queueManager(sleeptime int64, requestChannel <-chan Request) {
 }
 
 func main() {
-	args := os.Args[:1]
 	requestChannel := make(chan Request)
+	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	go listener(1000, requestChannel)
-	go queueManager(1000, requestChannel)
-	go consumer(1000, requestChannel)
+	//var (
+	//	listenerWaitGroup sync.WaitGroup
+	//)
+
+	interfaces, _ := net.Interfaces()
+	var validIfaces []net.Interface
+	// Get a valid network interface - needs flags listed here, exact IP doesn't matter
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		if iface.Flags&net.FlagBroadcast == 0 {
+			continue
+		}
+		if iface.Flags&net.FlagRunning == 0 {
+			continue
+		}
+		if iface.Flags&net.FlagMulticast == 0 {
+			continue
+		}
+		validIfaces = append(validIfaces, iface)
+	}
+
+	addrs, _ := validIfaces[0].Addrs()
+	ipParts := strings.Split(addrs[0].String(), "/")
+
+	go listener(100, requestChannel, ctx)
+	go queueManager(100, requestChannel, ctx)
+	go consumer(100, requestChannel, ctx)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	fmt.Println("Program is running. Press Ctrl+C to exit.")
-	fmt.Println(args)
-	go api.StartHttpApi(8080) //Should be a routine to prevent blocking
+	go api.HttpApiRoutine(8080, ctx)
+	go api.TcpListenerRoutine(ctx, ipParts[0], 1024)
 	<-sigChan
-
 	fmt.Println("Shutdown signal received. Cleaning up...")
+	cancelFunc()
 
 }
