@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"orchest-client/cmd/orchest-client/api"
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
+	//"strings"
 	"syscall"
 	"time"
 	//"sync"
@@ -139,8 +141,25 @@ func main() {
 		validIfaces = append(validIfaces, iface)
 	}
 
-	addrs, _ := validIfaces[0].Addrs()
-	ipParts := strings.Split(addrs[0].String(), "/")
+	defualtHandleEndpoint := func(w http.ResponseWriter, r *http.Request) (bool, []byte) {
+		bytes, e := io.ReadAll(r.Body)
+		fmt.Println(string(bytes))
+		fmt.Println(e)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"message":"orchest API is live!"}`)
+		return true, bytes
+	}
+
+	httpEndpoints := [...]api.HttpEndpoint{
+		api.HttpEndpoint{
+			RelativePath: "/orchest/api",
+			Handler:      defualtHandleEndpoint,
+		},
+	}
+
+	//addrs, _ := validIfaces[0].Addrs()
+	//ipParts := strings.Split(addrs[0].String(), "/")
 
 	go listener(100, requestChannel, ctx)
 	go queueManager(100, requestChannel, ctx)
@@ -149,8 +168,13 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	fmt.Println("Program is running. Press Ctrl+C to exit.")
-	go api.HttpApiRoutine(8080, ctx)
-	go api.TcpListenerRoutine(ctx, ipParts[0], 1024)
+
+	httpListener := api.GetHttpListener("127.0.0.1", 1024, httpEndpoints[:])
+	httpListener.OpenConnection(ctx)
+
+	///go api.HttpApiRoutine(8080, ctx)
+	//go api.TcpListenerRoutine(ctx, ipParts[0], 1024)
+	//go api.UdpListenerRoutine(ctx, ipParts[0], 1025) // WIP
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")
 	cancelFunc()
