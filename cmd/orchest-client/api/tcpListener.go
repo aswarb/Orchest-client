@@ -75,7 +75,7 @@ func (listener *TcpListener) OpenConnection(ctx context.Context) {
 			taskChannel := workerpool.GetTaskChan()
 
 			executeTaskFunc := func(w *Worker, task *WorkerTask) error {
-				fmt.Printf("Worker Pointer: %p\n", w)
+				fmt.Printf("Worker Pointer: %p\n", w) // test to see if workers switch properly
 				args := task.args.(*tcpArgs)
 				conn := *(args.conn)
 				conn.SetReadDeadline(time.Now().Add(time.Duration(w.taskTimeout) * time.Millisecond))
