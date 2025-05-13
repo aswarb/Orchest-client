@@ -172,6 +172,9 @@ func main() {
 	httpListener := api.GetHttpListener("127.0.0.1", 1024, httpEndpoints[:])
 	httpListener.OpenConnection(ctx)
 
+	tcpListener := api.GetTcpListener("192.168.0.51", 1025, 5)
+	tcpListener.OpenConnection(ctx)
+
 	///go api.HttpApiRoutine(8080, ctx)
 	//go api.TcpListenerRoutine(ctx, ipParts[0], 1024)
 	//go api.UdpListenerRoutine(ctx, ipParts[0], 1025) // WIP

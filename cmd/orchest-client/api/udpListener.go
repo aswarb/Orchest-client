@@ -18,6 +18,19 @@ func (listener *UdpListener) closeConnection() {
 func (listener *UdpListener) forceCloseConnection() {
 }
 
+func getNetworkListener(ctx context.Context, ipAddr string, port uint, protocol NetProtocol) (net.Listener, error){
+
+	listenerConfig := net.ListenConfig{
+		KeepAliveConfig: net.KeepAliveConfig{Enable: true},
+	}
+
+	addr := fmt.Sprintf("%s:%d", ipAddr, port)
+
+	listener, error := listenerConfig.Listen(ctx, TCP.String(), addr)
+	return listener, error
+
+}
+
 func UdpListenerRoutine(ctx context.Context, ipAddr string, port uint) {
 
 	listener, setupErr := getNetworkListener(ctx, ipAddr, port, UDP)

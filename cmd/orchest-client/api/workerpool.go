@@ -5,14 +5,14 @@ import (
 )
 
 type TaskArgs interface {
-	getTaskCount() uint
+	isTask() bool
 }
 
 type WorkerTask struct {
 	args       TaskArgs
-	Execute    func() error
-	OnComplete func()
-	OnError    func(error)
+	Execute    func(*Worker, *WorkerTask) error
+	OnComplete func(*Worker, *WorkerTask)
+	OnError    func(*Worker, *WorkerTask, error)
 }
 
 type Worker struct {
@@ -27,11 +27,11 @@ func (w *Worker) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case task := <-w.taskChannel:
-			err := task.Execute()
+			err := task.Execute(w, task)
 			if err == nil {
-				task.OnComplete()
+				task.OnComplete(w, task)
 			} else {
-				task.OnError(err)
+				task.OnError(w,task,err)
 			}
 		}
 
@@ -64,7 +64,7 @@ type WorkerPool struct {
 	cancelFunc func()
 }
 
-func (p *WorkerPool) addWorkers(num uint) {
+func (p *WorkerPool) AddWorkers(num uint) {
 	for i := uint(0); i < num; i++ {
 		newWorker := &Worker{
 			taskTimeout:    100,
@@ -75,7 +75,7 @@ func (p *WorkerPool) addWorkers(num uint) {
 	}
 }
 
-func (p *WorkerPool) startWork(parentContext context.Context) {
+func (p *WorkerPool) StartWork(parentContext context.Context) {
 
 	go func() {
 		<-parentContext.Done()
@@ -86,10 +86,14 @@ func (p *WorkerPool) startWork(parentContext context.Context) {
 		go p.allWorkers[i].Run(p.context)
 	}
 }
-func (p *WorkerPool) stopWork() {
+func (p *WorkerPool) StopWork() {
 	p.cancelFunc()
 }
 
-func (p *WorkerPool) addTask(task *WorkerTask) {
+func (p *WorkerPool) AddTask(task *WorkerTask) {
 	p.taskQueue <- task
+}
+
+func (p *WorkerPool) GetTaskChan() chan *WorkerTask {
+	return p.taskQueue
 }
