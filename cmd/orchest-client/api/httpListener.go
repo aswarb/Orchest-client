@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 )
 
 type HttpListener struct {
 	BaseListener
-	server    *http.Server
-	mux       *http.ServeMux
-	endpoints []HttpEndpoint
+	server     *http.Server
+	mux        *http.ServeMux
+	endpoints  []HttpEndpoint
+	ctx        context.Context
+	cancelFunc func()
 }
 
-func (listener *HttpListener) OpenConnection(ctx context.Context) {
+func (listener *HttpListener) OpenConnection() {
 	for _, endpoint := range listener.endpoints {
 
 		handleFunc := func(writer http.ResponseWriter, request *http.Request) {
@@ -41,13 +42,13 @@ func (listener *HttpListener) OpenConnection(ctx context.Context) {
 		}
 	}()
 	go func() {
-		<-ctx.Done()
+		<-listener.ctx.Done()
 		listener.CloseConnection()
 	}()
 }
 func (listener *HttpListener) CloseConnection() {
 	fmt.Println("Closing HTTP API")
-	listener.server.Shutdown(context.Background())
+	listener.server.Shutdown(listener.ctx)
 }
 func (listener *HttpListener) ForceCloseConnection() {
 	listener.server.Close()
@@ -58,7 +59,8 @@ type HttpEndpoint struct {
 	Handler      func(http.ResponseWriter, *http.Request) (bool, []byte)
 }
 
-func GetHttpListener(ipAddr string, port uint, endpoints []HttpEndpoint) Listener {
+func GetHttpListener(ctx context.Context, ipAddr string, port uint, endpoints []HttpEndpoint) Listener {
+	thisCtx, cancelFunc := context.WithCancel(ctx)
 	mux := http.NewServeMux()
 
 	addr := fmt.Sprintf("%s:%d", ipAddr, port)
@@ -66,13 +68,11 @@ func GetHttpListener(ipAddr string, port uint, endpoints []HttpEndpoint) Listene
 		Addr:    addr,
 		Handler: mux,
 	}
-	var wg sync.WaitGroup
 	baseListener := BaseListener{
 		localAddr:     ipAddr,
 		port:          port,
 		outputChannel: make(chan NetMessage, 100),
 		errorChannel:  make(chan error, 100),
-		wg:            wg,
 		running:       false,
 	}
 	httpListener := &HttpListener{
@@ -80,6 +80,8 @@ func GetHttpListener(ipAddr string, port uint, endpoints []HttpEndpoint) Listene
 		server:       &server,
 		endpoints:    endpoints,
 		mux:          mux,
+		ctx:          thisCtx,
+		cancelFunc:   cancelFunc,
 	}
 
 	return httpListener

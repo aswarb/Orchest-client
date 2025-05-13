@@ -11,14 +11,14 @@ type UdpListener struct {
 	localAddr net.Addr
 }
 
-func (listener *UdpListener) openConnection(ctx context.Context) {
+func (listener *UdpListener) openConnection() {
 }
 func (listener *UdpListener) closeConnection() {
 }
 func (listener *UdpListener) forceCloseConnection() {
 }
 
-func getNetworkListener(ctx context.Context, ipAddr string, port uint, protocol NetProtocol) (net.Listener, error){
+func getNetworkListener(ctx context.Context, ipAddr string, port uint, protocol NetProtocol) (net.Listener, error) {
 
 	listenerConfig := net.ListenConfig{
 		KeepAliveConfig: net.KeepAliveConfig{Enable: true},

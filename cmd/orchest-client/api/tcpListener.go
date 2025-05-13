@@ -3,65 +3,31 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"time"
-	"io"
-"sync"
 )
-
-func getTcpListener(ctx context.Context, ipAddr string, port uint) (net.Listener, error) {
-	listenerConfig := net.ListenConfig{
-		KeepAliveConfig: net.KeepAliveConfig{Enable: true},
-	}
-
-	addr := fmt.Sprintf("%s:%d", ipAddr, port)
-
-	listener, error := listenerConfig.Listen(ctx, TCP.String(), addr)
-	return listener, error
-}
 
 type TcpListener struct {
 	BaseListener
-	localAddr string
+	localAddr   string
 	workerCount uint
+	ctx         context.Context
+	cancelFunc  func()
 }
 
-func connectionHandler(ctx context.Context, conn *net.Conn) {
-	var arr []string
-	defer (*conn).Close()
+func onCompleteFunc(w *Worker, task *WorkerTask)       {}
+func onErrorFunc(w *Worker, task *WorkerTask, e error) {}
 
-	for {
-		buf := make([]byte, 4096)
-		startIdx, err := (*conn).Read(buf)
+func (listener *TcpListener) OpenConnection() {
 
-		if err != nil {
-			fmt.Println("read error: %v", err)
-			break
-		}
-		stringPayload := string(buf[:startIdx])
-		arr = append(arr, stringPayload)
-		//Strip off ending \n character for printing:
-		fmt.Println(fmt.Sprintf("\n%s", stringPayload[:len(stringPayload)-1]))
-	}
-}
-
-type tcpArgs struct {
-	conn *net.Conn
-}
-
-func (t tcpArgs) isTask() bool {
-	return true
-}
-
-func (listener *TcpListener) OpenConnection(ctx context.Context) {
-
-	workerpool := MakeWorkerPool(ctx)
+	workerpool := MakeWorkerPool(listener.ctx)
 	workerpool.AddWorkers(listener.workerCount)
 
 	go func() {
-		netListener, setupErr := getTcpListener(ctx, listener.localAddr, listener.port)
+		netListener, setupErr := getTcpListener(listener.ctx, listener.localAddr, listener.port)
 
-		workerpool.StartWork(ctx)
+		workerpool.StartWork(listener.ctx)
 		if setupErr != nil {
 			fmt.Println(setupErr)
 		} else {
@@ -72,41 +38,17 @@ func (listener *TcpListener) OpenConnection(ctx context.Context) {
 			if acceptErr != nil {
 				fmt.Println(acceptErr)
 			}
-			taskChannel := workerpool.GetTaskChan()
-
-			executeTaskFunc := func(w *Worker, task *WorkerTask) error {
-				fmt.Printf("Worker Pointer: %p\n", w) // test to see if workers switch properly
-				args := task.args.(*tcpArgs)
-				conn := *(args.conn)
-				conn.SetReadDeadline(time.Now().Add(time.Duration(w.taskTimeout) * time.Millisecond))
-				buf := make([]byte, 4096)
-				startIdx, err := conn.Read(buf)
-
-				if err != nil {
-					fmt.Println("read error: %v", err)
-				} else {
-				stringPayload := string(buf[:startIdx])
-				//Strip off ending \n character for printing:
-				fmt.Println(fmt.Sprintf("\n%s", stringPayload[:len(stringPayload)-1]))
-				}
-				if err != io.EOF {
-				taskChannel <- task}
-				return nil
-			}
-
-			OnCompleteFunc := func(w *Worker, task *WorkerTask) {}
-			OnErrorFunc := func(w *Worker, task *WorkerTask, e error) {}
 
 			args := &tcpArgs{conn: (&conn)}
 			task := WorkerTask{
 				args:       args,
 				Execute:    executeTaskFunc,
-				OnComplete: OnCompleteFunc,
-				OnError:    OnErrorFunc,
+				OnComplete: onCompleteFunc,
+				OnError:    onErrorFunc,
 			}
 
 			select {
-			case <-ctx.Done():
+			case <-listener.ctx.Done():
 				return
 			default:
 
@@ -118,26 +60,56 @@ func (listener *TcpListener) OpenConnection(ctx context.Context) {
 	}()
 }
 
-func (listener *TcpListener) CloseConnection() {
-}
-func (listener *TcpListener) ForceCloseConnection() {
+func (listener *TcpListener) CloseConnection()      { listener.cancelFunc() }
+func (listener *TcpListener) ForceCloseConnection() { listener.cancelFunc() }
+
+type tcpArgs struct {
+	conn *net.Conn
 }
 
-func GetTcpListener(ipAddr string, port uint, workerCount uint) Listener {
-	//addr := fmt.Sprintf("%s:%d", ipAddr, port)
-	var wg sync.WaitGroup
+func (t tcpArgs) isTask() bool {
+	return true
+}
+
+func executeTaskFunc(w *Worker, task *WorkerTask) error {
+
+	taskChannel := (*w).GetTaskChan()
+	fmt.Printf("Worker Pointer: %p\n", w) // test to see if workers switch properly
+	args := task.args.(*tcpArgs)
+	conn := *(args.conn)
+	conn.SetReadDeadline(time.Now().Add(time.Duration(w.taskTimeout) * time.Millisecond))
+	buf := make([]byte, 4096)
+	startIdx, err := conn.Read(buf)
+
+	if err != nil {
+		fmt.Println("read error: %v", err)
+	} else {
+		stringPayload := string(buf[:startIdx])
+		//Strip off ending \n character for printing:
+		fmt.Println(fmt.Sprintf("\n%s", stringPayload[:len(stringPayload)-1]))
+	}
+	if err != io.EOF {
+		taskChannel <- task
+	}
+	return nil
+}
+
+func GetTcpListener(ctx context.Context, ipAddr string, port uint, workerCount uint) Listener {
+	thisCtx, cancelFunc := context.WithCancel(ctx)
+
 	baseListener := BaseListener{
 		localAddr:     ipAddr,
 		port:          port,
 		outputChannel: make(chan NetMessage, 100),
 		errorChannel:  make(chan error, 100),
-		wg:            wg,
 		running:       false,
 	}
 	tcpListener := &TcpListener{
 		BaseListener: baseListener,
-		localAddr:ipAddr,
-		workerCount: workerCount,
+		localAddr:    ipAddr,
+		workerCount:  workerCount,
+		ctx:          thisCtx,
+		cancelFunc:   cancelFunc,
 	}
 
 	return tcpListener

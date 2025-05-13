@@ -21,6 +21,10 @@ type Worker struct {
 	shouldContinue bool
 }
 
+func (w *Worker) GetTaskChan() chan *WorkerTask {
+	return w.taskChannel
+}
+
 func (w *Worker) Run(ctx context.Context) {
 	for w.shouldContinue {
 		select {
@@ -31,7 +35,7 @@ func (w *Worker) Run(ctx context.Context) {
 			if err == nil {
 				task.OnComplete(w, task)
 			} else {
-				task.OnError(w,task,err)
+				task.OnError(w, task, err)
 			}
 		}
 
