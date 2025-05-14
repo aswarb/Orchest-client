@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	wp "orchest-client/internal/workerpool"
 	"time"
 )
 
@@ -27,12 +28,12 @@ type TcpListener struct {
 	cancelFunc  func()
 }
 
-func onCompleteFunc(w *Worker, task *WorkerTask)       {}
-func onErrorFunc(w *Worker, task *WorkerTask, e error) {}
+func onCompleteFunc(w *wp.Worker, task *wp.WorkerTask)       {}
+func onErrorFunc(w *wp.Worker, task *wp.WorkerTask, e error) {}
 
 func (listener *TcpListener) OpenConnection() {
 
-	workerpool := MakeWorkerPool(listener.ctx)
+	workerpool := wp.MakeWorkerPool(listener.ctx)
 	workerpool.AddWorkers(listener.workerCount)
 
 	go func() {
@@ -48,9 +49,9 @@ func (listener *TcpListener) OpenConnection() {
 			conn, acceptErr := netListener.Accept()
 
 			args := &tcpArgs{conn: (&conn)}
-			task := WorkerTask{
-				args: args,
-				Execute: func(w *Worker, task *WorkerTask) error {
+			task := wp.WorkerTask{
+				Args: args,
+				Execute: func(w *wp.Worker, task *wp.WorkerTask) error {
 					output, err := executeTaskFunc(w, task)
 
 					if err != nil {
@@ -85,16 +86,16 @@ type tcpArgs struct {
 	conn *net.Conn
 }
 
-func (t tcpArgs) isTask() bool {
+func (t tcpArgs) IsTask() bool {
 	return true
 }
 
-func executeTaskFunc(w *Worker, task *WorkerTask) (NetMessage, error) {
+func executeTaskFunc(w *wp.Worker, task *wp.WorkerTask) (NetMessage, error) {
 	taskChannel := (*w).GetTaskChan()
 	//fmt.Printf("Worker Pointer: %p\n", w) // test to see if workers switch properly
-	args := task.args.(*tcpArgs)
+	args := task.GetArgs().(*tcpArgs)
 	conn := *(args.conn)
-	conn.SetReadDeadline(time.Now().Add(time.Duration(w.taskTimeout) * time.Millisecond))
+	conn.SetReadDeadline(time.Now().Add(time.Duration(w.GetTimeout()) * time.Millisecond))
 	buf := make([]byte, 4096)
 	startIdx, err := conn.Read(buf)
 	if err != io.EOF {

@@ -1,24 +1,31 @@
-package api
+package workerpool
 
 import (
 	"context"
 )
 
 type TaskArgs interface {
-	isTask() bool
+	IsTask() bool
 }
 
 type WorkerTask struct {
-	args       TaskArgs
+	Args       TaskArgs
 	Execute    func(*Worker, *WorkerTask) error
 	OnComplete func(*Worker, *WorkerTask)
 	OnError    func(*Worker, *WorkerTask, error)
+}
+func (wt *WorkerTask) GetArgs() TaskArgs {
+	return  wt.Args
 }
 
 type Worker struct {
 	taskTimeout    uint64
 	taskChannel    chan *WorkerTask
 	shouldContinue bool
+}
+
+func (w *Worker) GetTimeout() uint64 {
+	return w.taskTimeout
 }
 
 func (w *Worker) GetTaskChan() chan *WorkerTask {

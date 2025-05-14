@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"orchest-client/cmd/orchest-client/api"
+	"orchest-client/internal/api"
 	"os"
 	"os/signal"
 	"strconv"
@@ -187,8 +187,6 @@ func main() {
 			case out := <-outputChan:
 				fmt.Print("\n")
 				fmt.Println(out.GetDataString())
-			default:
-				continue
 			}
 		}
 	}()
