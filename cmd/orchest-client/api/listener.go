@@ -23,6 +23,13 @@ type NetMessage struct {
 	origin    string
 }
 
+func (n *NetMessage) GetDataString() string {
+	return string(n.data)
+}
+func (n *NetMessage) GetData() []byte {
+	return n.data
+}
+
 type Listener interface {
 	GetLocalAddr() string
 	GetChannel() chan NetMessage

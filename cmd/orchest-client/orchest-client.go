@@ -10,10 +10,9 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	//"strings"
+	"strings"
 	"syscall"
 	"time"
-	//"sync"
 )
 
 type Request interface {
@@ -118,10 +117,6 @@ func main() {
 	requestChannel := make(chan Request)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	//var (
-	//	listenerWaitGroup sync.WaitGroup
-	//)
-
 	interfaces, _ := net.Interfaces()
 	var validIfaces []net.Interface
 	// Get a valid network interface - needs flags listed here, exact IP doesn't matter
@@ -158,8 +153,8 @@ func main() {
 		},
 	}
 
-	//addrs, _ := validIfaces[0].Addrs()
-	//ipParts := strings.Split(addrs[0].String(), "/")
+	addrs, _ := validIfaces[0].Addrs()
+	ipParts := strings.Split(addrs[0].String(), "/")
 
 	go listener(100, requestChannel, ctx)
 	go queueManager(100, requestChannel, ctx)
@@ -169,15 +164,35 @@ func main() {
 
 	fmt.Println("Program is running. Press Ctrl+C to exit.")
 
-	httpListener := api.GetHttpListener(ctx, "127.0.0.1", 1024, httpEndpoints[:])
+	errorChannel := make(chan error, 1000)
+	outputChan := make(chan api.NetMessage, 1000)
+
+	httpListener := api.GetHttpListener(ctx, "127.0.0.1", 1024, httpEndpoints[:], outputChan, errorChannel)
 	httpListener.OpenConnection()
 
-	tcpListener := api.GetTcpListener(ctx, "192.168.0.51", 1025, 5)
+	tcpListener := api.GetTcpListener(ctx, ipParts[0], 1025, 5, outputChan, errorChannel)
 	tcpListener.OpenConnection()
 
-	///go api.HttpApiRoutine(8080, ctx)
-	//go api.TcpListenerRoutine(ctx, ipParts[0], 1024)
-	//go api.UdpListenerRoutine(ctx, ipParts[0], 1025) // WIP
+	udpListener := api.GetUdpListener(ctx, ipParts[0], 1026, 5, outputChan, errorChannel)
+	udpListener.OpenConnection()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err := <-errorChannel:
+				fmt.Print("\n")
+				fmt.Println(err)
+			case out := <-outputChan:
+				fmt.Print("\n")
+				fmt.Println(out.GetDataString())
+			default:
+				continue
+			}
+		}
+	}()
+
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")
 	cancelFunc()

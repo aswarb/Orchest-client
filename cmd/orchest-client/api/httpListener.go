@@ -59,7 +59,7 @@ type HttpEndpoint struct {
 	Handler      func(http.ResponseWriter, *http.Request) (bool, []byte)
 }
 
-func GetHttpListener(ctx context.Context, ipAddr string, port uint, endpoints []HttpEndpoint) Listener {
+func GetHttpListener(ctx context.Context, ipAddr string, port uint, endpoints []HttpEndpoint, outputChan chan NetMessage, errChan chan error) Listener {
 	thisCtx, cancelFunc := context.WithCancel(ctx)
 	mux := http.NewServeMux()
 
@@ -71,8 +71,8 @@ func GetHttpListener(ctx context.Context, ipAddr string, port uint, endpoints []
 	baseListener := BaseListener{
 		localAddr:     ipAddr,
 		port:          port,
-		outputChannel: make(chan NetMessage, 100),
-		errorChannel:  make(chan error, 100),
+		outputChannel: outputChan,
+		errorChannel:  errChan,
 		running:       false,
 	}
 	httpListener := &HttpListener{

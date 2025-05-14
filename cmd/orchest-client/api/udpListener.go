@@ -4,57 +4,69 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 )
 
 type UdpListener struct {
-	channel   chan NetMessage
-	localAddr net.Addr
+	BaseListener
+	workerCount uint
+	ctx         context.Context
+	cancelFunc  func()
 }
 
-func (listener *UdpListener) openConnection() {
-}
-func (listener *UdpListener) closeConnection() {
-}
-func (listener *UdpListener) forceCloseConnection() {
-}
+func (listener *UdpListener) OpenConnection() {
 
-func getNetworkListener(ctx context.Context, ipAddr string, port uint, protocol NetProtocol) (net.Listener, error) {
-
-	listenerConfig := net.ListenConfig{
-		KeepAliveConfig: net.KeepAliveConfig{Enable: true},
-	}
-
-	addr := fmt.Sprintf("%s:%d", ipAddr, port)
-
-	listener, error := listenerConfig.Listen(ctx, TCP.String(), addr)
-	return listener, error
-
-}
-
-func UdpListenerRoutine(ctx context.Context, ipAddr string, port uint) {
-
-	listener, setupErr := getNetworkListener(ctx, ipAddr, port, UDP)
-	if setupErr != nil {
-		fmt.Println(setupErr)
-	} else {
-		fmt.Println(fmt.Sprintf("Listening for tcp on: %s:%d", ipAddr, port))
-	}
-	for {
-		conn, acceptErr := listener.Accept()
+	go func() {
+		addr := net.UDPAddr{IP: net.ParseIP(listener.GetLocalAddr()), Port: int(listener.port)}
+		fmt.Println(fmt.Sprintf("Listening for udp on: %s:%d", listener.GetLocalAddr(), listener.port))
+		conn, acceptErr := net.ListenUDP("udp", &addr)
 		if acceptErr != nil {
-			fmt.Println(acceptErr)
+			listener.errorChannel <- acceptErr
 		}
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			if acceptErr == nil {
-				go connectionHandler(ctx, &conn)
+		for {
+			select {
+			case <-listener.ctx.Done():
+				return
+			default:
+				if acceptErr == nil {
+					buf := make([]byte, 4096)
+					num, addr, err := conn.ReadFromUDP(buf)
+					if err != nil {
+						listener.errorChannel <- err
+					}
+					output := NetMessage{
+						data:      buf[:num],
+						protocol:  UDP,
+						timestamp: time.Now(),
+						origin:    addr.String(),
+					}
+					if len(output.GetData()) != 0 {
+						listener.outputChannel <- output
+					}
+				}
 			}
 		}
+	}()
+}
+
+func (listener *UdpListener) CloseConnection()      { listener.cancelFunc() }
+func (listener *UdpListener) ForceCloseConnection() { listener.cancelFunc() }
+
+func GetUdpListener(ctx context.Context, ipAddr string, port uint, workerCount uint, outputChan chan NetMessage, errChan chan error) Listener {
+	thisCtx, cancelFunc := context.WithCancel(ctx)
+	baseListener := BaseListener{
+		localAddr:     ipAddr,
+		port:          port,
+		outputChannel: outputChan,
+		errorChannel:  errChan,
+		running:       false,
+	}
+	tcpListener := &UdpListener{
+		BaseListener: baseListener,
+		workerCount:  workerCount,
+		ctx:          thisCtx,
+		cancelFunc:   cancelFunc,
 	}
 
-}
-func GetUdpListener() *Listener {
-	return nil
+	return tcpListener
 }
