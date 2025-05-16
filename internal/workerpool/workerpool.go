@@ -14,8 +14,9 @@ type WorkerTask struct {
 	OnComplete func(*Worker, *WorkerTask)
 	OnError    func(*Worker, *WorkerTask, error)
 }
+
 func (wt *WorkerTask) GetArgs() TaskArgs {
-	return  wt.Args
+	return wt.Args
 }
 
 type Worker struct {

@@ -1,0 +1,15 @@
+[Unit]
+Description=%s
+After=%s
+
+[Service]
+Type=%s
+ExecStart=%s
+RemainAfterExit=%s
+
+[Timer]
+OnBootSec=%s
+OnUnitActiveSec=%s
+
+[Install]
+WantedBy=%s
