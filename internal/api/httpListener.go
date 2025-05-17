@@ -18,7 +18,6 @@ type HttpListener struct {
 
 func (listener *HttpListener) OpenConnection() {
 	for _, endpoint := range listener.endpoints {
-
 		handleFunc := func(writer http.ResponseWriter, request *http.Request) {
 			fmt.Println(request)
 			shouldOutput, outputvalue := endpoint.Handler(writer, request)
@@ -68,8 +67,7 @@ func GetHttpListener(ctx context.Context, ipAddr string, port uint, endpoints []
 		Addr:    addr,
 		Handler: mux,
 	}
-	baseListener := BaseListener{
-		localAddr:     ipAddr,
+	baseListener := BaseListener{localAddr: ipAddr,
 		port:          port,
 		outputChannel: outputChan,
 		errorChannel:  errChan,
