@@ -1,4 +1,4 @@
-package taskparser
+package taskParser
 
 import (
 	"io"
@@ -23,8 +23,14 @@ func (t *Task) GetCmd() *exec.Cmd {
 	return t.command
 }
 
-func (t *Task) Execute() (string, error) {
-	return "", nil
+func (t *Task) ExecuteBlocking() {
+
+	t.command.Start()
+}
+
+func (t *Task) Execute() {
+
+	t.command.Run()
 }
 
 func (t *Task) WantsStdin() bool {

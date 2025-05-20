@@ -1,8 +1,8 @@
 [[Task]]
 uid = "t001"
-name = "task 2"
-command = "/usr/bin/echo"
-args = ["this is task 1"]
+name = "task 1"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 1\""]
 timeout = 3000
 delay = 200
 next = ["t002"]
@@ -12,8 +12,8 @@ readstdin = false
 [[Task]]
 uid = "t002"
 name = "task 2"
-command = "/usr/bin/echo"
-args = ["this is task 2"]
+command = "/usr/bin/notify-send"
+args = ["\"this is task 2\""]
 timeout = 3000
 delay = 200
 next = [""]
