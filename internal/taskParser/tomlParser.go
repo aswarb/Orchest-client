@@ -3,9 +3,9 @@ package taskParser
 import (
 	//"fmt"
 	"fmt"
-	"os"
-
 	"github.com/BurntSushi/toml"
+	"maps"
+	"os"
 )
 
 type TomlTask struct {
@@ -44,52 +44,61 @@ func (tf *TaskFile) GetTaskByUid(uid string) *TomlTask {
 }
 
 // NOTE: STILL NEEDS CYCLE DETECTION. HINT: LOOK FOR NO VALID ROOT NODES
-func (tf *TaskFile) GetTaskChain() []*TomlTask {
-	orderedTasks := []*TomlTask{}
-	rootNodes := []*TomlTask{}
+func GetTaskChain(tasks []*Task) []*Task {
+	orderedTasks := []*Task{}
 
-	incomingCountMap := make(map[string]int)
+	incomingCountMap := make(map[*Task]int)
 
-	for _, task := range tf.Tasks {
+	for _, task := range tasks {
 
-		_, thisTaskInMap := incomingCountMap[task.Uid]
+		_, thisTaskInMap := incomingCountMap[task]
 		if !thisTaskInMap {
-			incomingCountMap[task.Uid] = 0
+			incomingCountMap[task] = 0
 		}
 
-		for _, uid := range task.Next {
-			if uid == "" {
-				continue
-			}
-			_, ok := incomingCountMap[uid]
+		for _, nextTask := range task.Next() {
+			_, ok := incomingCountMap[nextTask]
 
 			if ok {
-				incomingCountMap[uid]++
+				incomingCountMap[nextTask]++
 			} else {
-				incomingCountMap[uid] = 1
+				incomingCountMap[nextTask] = 1
 			}
 		}
 	}
 
+	zeroIncomingNodesSet := make(map[*Task]struct{})
 	for k, v := range incomingCountMap {
 		if v == 0 {
-			rootNodes = append(rootNodes, tf.GetTaskByUid(k))
+			zeroIncomingNodesSet[k] = struct{}{}
 		}
 	}
 	// Kahn's Algorithm: https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
 
-	inEdgesCounts := make(map[string]int)
-	for k, v := range incomingCountMap {
-		inEdgesCounts[k] = v
-	}
-	/*
-		for rootIdx, root := range rootNodes {
-			orderedTasks := append(orderedTasks, root)
-			for _, next := range root.Next {
-				//
+	inEdgesCounts := make(map[*Task]int)
+	maps.Copy(inEdgesCounts, incomingCountMap)
+	for len(zeroIncomingNodesSet) > 0 {
+		var pointer *Task
+		for k := range zeroIncomingNodesSet {
+			pointer = k
+			break
+		}
+
+
+		delete(zeroIncomingNodesSet, pointer)
+		orderedTasks = append(orderedTasks, pointer)
+		//fmt.Println(orderedTasks)
+		for _, next := range pointer.Next() {
+			count, ok := inEdgesCounts[next]
+			fmt.Println(count, &next)
+			if ok {
+				inEdgesCounts[next]--
+			}
+			if inEdgesCounts[next] <= 0 {
+				zeroIncomingNodesSet[next] = struct{}{}
 			}
 		}
-	*/
+	}
 	return orderedTasks
 }
 

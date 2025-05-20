@@ -200,11 +200,12 @@ func main() {
 
 	//chain := fileHolder.GetTaskChain()
 	out := taskParser.TomlTasksToTasks(fileHolder.Tasks)
-
+	sortedNodes := taskParser.GetTaskChain(out)
 	fmt.Println(out)
-	for _, task := range out {
-		fmt.Println(task)
+	for _, node := range sortedNodes {
+		fmt.Println(&node, " -> ",node.Next())
 	}
+
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")
 	cancelFunc()
