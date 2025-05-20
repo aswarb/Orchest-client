@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"orchest-client/internal/api"
+	"orchest-client/internal/taskParser"
 	"os"
 	"os/signal"
 	"strconv"
@@ -190,6 +191,8 @@ func main() {
 			}
 		}
 	}()
+
+	taskparser.Main()
 
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")

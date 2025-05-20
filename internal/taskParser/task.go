@@ -1,7 +1,10 @@
 package taskparser
 
 import (
+	"fmt"
+	"github.com/BurntSushi/toml"
 	"io"
+	"os"
 	"os/exec"
 )
 
@@ -35,7 +38,9 @@ func (t *Task) GivesStdout() bool {
 	return t.givestdout
 }
 
-func GetTask(executable string, args []string, uid string, timeout uint64, delay uint64, next []*Task, givestdout bool, readstdin bool) *Task {
+func GetTask(executable string, args []string, uid string, timeout uint64,
+	delay uint64, next []*Task, givestdout bool, readstdin bool) *Task {
+
 	cmd := exec.Command(executable, args...)
 
 	destWriters := []io.Writer{}
@@ -63,4 +68,9 @@ func GetTask(executable string, args []string, uid string, timeout uint64, delay
 	}
 
 	return task
+}
+
+// Topological sort of a Directed Acyclic Graph
+func GetSerialExecuteOrder(startingNode *Task) {
+
 }
