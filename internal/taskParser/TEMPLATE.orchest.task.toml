@@ -10,10 +10,78 @@ givestdout = true
 readstdin = false
 
 [[Task]]
+uid = "t003"
+name = "task 3"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 3\""]
+timeout = 3000
+delay = 200
+next = ["t002"]
+givestdout = true
+readstdin = false
+
+
+[[Task]]
 uid = "t002"
 name = "task 2"
 command = "/usr/bin/notify-send"
 args = ["\"this is task 2\""]
+timeout = 3000
+delay = 200
+next = ["t004"]
+givestdout = true
+readstdin = false
+
+
+[[Task]]
+uid = "t004"
+name = "task 4"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 4\""]
+timeout = 3000
+delay = 200
+next = ["t005", "t006"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "t005"
+name = "task 5"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 5\""]
+timeout = 3000
+delay = 200
+next = ["t007"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "t006"
+name = "task 6"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 6\""]
+timeout = 3000
+delay = 200
+next = ["t007"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "t007"
+name = "task 7"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 7\""]
+timeout = 3000
+delay = 200
+next = ["t008"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "t008"
+name = "task 8"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 8\""]
 timeout = 3000
 delay = 200
 next = [""]

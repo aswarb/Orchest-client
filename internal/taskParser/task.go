@@ -58,8 +58,8 @@ func (t *Task) Execute() {
 }
 
 func (t *Task) AddNextTasks(tasks ...*Task) {
-	for _, task := range tasks {
-		t.next = append(t.next, task)
+	for i := range tasks {
+		t.next = append(t.next, tasks[i])
 	}
 }
 

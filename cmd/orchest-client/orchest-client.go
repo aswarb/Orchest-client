@@ -196,14 +196,14 @@ func main() {
 	fmt.Println(tomlPath)
 	var fileHolder taskParser.TaskFile
 	taskParser.GetTomlTaskArray(tomlPath, &fileHolder)
-	//fmt.Println(fileHolder)
-
-	//chain := fileHolder.GetTaskChain()
 	out := taskParser.TomlTasksToTasks(fileHolder.Tasks)
 	sortedNodes := taskParser.GetTaskChain(out)
-	fmt.Println(out)
-	for _, node := range sortedNodes {
-		fmt.Println(&node, " -> ",node.Next())
+
+	fmt.Println("Sorted array:", sortedNodes)
+	for i := range sortedNodes {
+		// sortedNodes[i] is a *Task; printing it shows the real Task address
+		fmt.Printf("Task pointer: %p → Next: %v\n", sortedNodes[i], sortedNodes[i].Next())
+		sortedNodes[i].Execute()
 	}
 
 	<-sigChan

@@ -1,8 +1,6 @@
 package taskParser
 
 import (
-	//"fmt"
-	"fmt"
 	"github.com/BurntSushi/toml"
 	"maps"
 	"os"
@@ -48,21 +46,21 @@ func GetTaskChain(tasks []*Task) []*Task {
 	orderedTasks := []*Task{}
 
 	incomingCountMap := make(map[*Task]int)
+	for i := range tasks {
 
-	for _, task := range tasks {
-
-		_, thisTaskInMap := incomingCountMap[task]
+		_, thisTaskInMap := incomingCountMap[tasks[i]]
 		if !thisTaskInMap {
-			incomingCountMap[task] = 0
+			incomingCountMap[tasks[i]] = 0
 		}
 
-		for _, nextTask := range task.Next() {
-			_, ok := incomingCountMap[nextTask]
+		for j := range tasks[i].Next() {
+			next := tasks[i].Next()
+			_, ok := incomingCountMap[next[j]]
 
 			if ok {
-				incomingCountMap[nextTask]++
+				incomingCountMap[next[j]]++
 			} else {
-				incomingCountMap[nextTask] = 1
+				incomingCountMap[next[j]] = 1
 			}
 		}
 	}
@@ -84,13 +82,10 @@ func GetTaskChain(tasks []*Task) []*Task {
 			break
 		}
 
-
 		delete(zeroIncomingNodesSet, pointer)
 		orderedTasks = append(orderedTasks, pointer)
-		//fmt.Println(orderedTasks)
 		for _, next := range pointer.Next() {
-			count, ok := inEdgesCounts[next]
-			fmt.Println(count, &next)
+			_, ok := inEdgesCounts[next]
 			if ok {
 				inEdgesCounts[next]--
 			}
@@ -159,7 +154,6 @@ func TomlTasksToTasks(arr []TomlTask) []*Task {
 			}
 		}
 	}
-	fmt.Println((toBeWired))
 
 	return tasks
 }
