@@ -1,7 +1,6 @@
 package taskparser
 
 import (
-	"fmt"
 	"github.com/BurntSushi/toml"
 	"os"
 )
@@ -22,12 +21,10 @@ type TaskFile struct {
 	Task []TomlTask `toml:"Task"`
 }
 
-func GetTomlTaskArray[T any](holderStruct T) (T, error) {
-	wd, _ := os.Getwd()
-	data, _ := os.ReadFile(fmt.Sprintf("%s/internal/taskParser/TEMPLATE.orchest.task.toml", wd))
+func GetTomlTaskArray[T any](path string, holderStruct *T) (*T, error) {
+	data, _ := os.ReadFile(path)
 	fileContents := string(data)
 
-	_, err := toml.Decode(fileContents, &holderStruct)
-
+	_, err := toml.Decode(fileContents, holderStruct)
 	return holderStruct, err
 }
