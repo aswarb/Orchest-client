@@ -23,6 +23,12 @@ func (t *Task) Next() []*Task {
 func (t *Task) GetCmd() *exec.Cmd {
 	return t.command
 }
+func (t *Task) GetUid() string      { return t.uid }
+func (t *Task) GetName() string     { return t.name }
+func (t *Task) GetTimeout() uint64  { return t.timeout }
+func (t *Task) GetDelay() uint64    { return t.delay }
+func (t *Task) GetGivestdout() bool { return t.givestdout }
+func (t *Task) GetReadstdin() bool  { return t.readstdin }
 
 func (t *Task) preExecuteSetup() {
 	destWriters := []io.Writer{}
@@ -69,12 +75,13 @@ func (t *Task) GivesStdout() bool {
 	return t.givestdout
 }
 
-func GetTask(executable string, args []string, uid string, timeout uint64,
+func GetTask(name string, executable string, args []string, uid string, timeout uint64,
 	delay uint64, next []*Task, givestdout bool, readstdin bool) *Task {
 
 	cmd := exec.Command(executable, args...)
 
-	task := &Task{
+	task := Task{
+		name:       name,
 		command:    cmd,
 		uid:        uid,
 		timeout:    timeout,
@@ -84,7 +91,7 @@ func GetTask(executable string, args []string, uid string, timeout uint64,
 		readstdin:  readstdin,
 	}
 
-	return task
+	return &task
 }
 
 // Topological sort of a Directed Acyclic Graph

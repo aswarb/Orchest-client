@@ -198,15 +198,13 @@ func main() {
 	taskParser.GetTomlTaskArray(tomlPath, &fileHolder)
 	//fmt.Println(fileHolder)
 
-	for index, _ := range fileHolder.Tasks {
-		if index == len(fileHolder.Tasks) {
-			break
-		}
-		chain := fileHolder.GetTaskChain()
-		fmt.Println(chain)
+	//chain := fileHolder.GetTaskChain()
+	out := taskParser.TomlTasksToTasks(fileHolder.Tasks)
 
+	fmt.Println(out)
+	for _, task := range out {
+		fmt.Println(task)
 	}
-
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")
 	cancelFunc()
