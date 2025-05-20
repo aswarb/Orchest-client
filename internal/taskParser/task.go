@@ -6,8 +6,9 @@ import (
 )
 
 type Task struct {
-	command    *exec.Cmd
 	uid        string
+	name       string
+	command    *exec.Cmd
 	timeout    uint64
 	delay      uint64
 	next       []*Task
@@ -23,14 +24,41 @@ func (t *Task) GetCmd() *exec.Cmd {
 	return t.command
 }
 
-func (t *Task) ExecuteBlocking() {
+func (t *Task) preExecuteSetup() {
+	destWriters := []io.Writer{}
 
+	for _, nextTask := range t.next {
+		if nextTask.WantsStdin() && t.givestdout {
+			pipeRead, pipeWrite := io.Pipe()
+			destWriters = append(destWriters, pipeWrite)
+			nextTask.command.Stdin = pipeRead
+		}
+	}
+
+	if t.givestdout && len(destWriters) > 0 {
+		multiWriter := io.MultiWriter(destWriters...)
+		t.command.Stdout = multiWriter
+	}
+}
+
+func (t *Task) ExecuteBlocking() {
+	t.preExecuteSetup()
 	t.command.Start()
 }
 
 func (t *Task) Execute() {
-
+	t.preExecuteSetup()
 	t.command.Run()
+}
+
+func (t *Task) AddNextTasks(tasks ...*Task) {
+	for _, task := range tasks {
+		t.next = append(t.next, task)
+	}
+}
+
+func (t *Task) SetNextTasks(tasks []*Task) {
+	t.next = tasks
 }
 
 func (t *Task) WantsStdin() bool {
@@ -46,20 +74,6 @@ func GetTask(executable string, args []string, uid string, timeout uint64,
 
 	cmd := exec.Command(executable, args...)
 
-	destWriters := []io.Writer{}
-
-	for _, nextTask := range next {
-		if nextTask.WantsStdin() && givestdout {
-			pipeRead, pipeWrite := io.Pipe()
-			destWriters = append(destWriters, pipeWrite)
-			nextTask.command.Stdin = pipeRead
-		}
-	}
-
-	if givestdout && len(destWriters) > 0 {
-		multiWriter := io.MultiWriter(destWriters...)
-		cmd.Stdout = multiWriter
-	}
 	task := &Task{
 		command:    cmd,
 		uid:        uid,
