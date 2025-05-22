@@ -202,7 +202,7 @@ func main() {
 	fmt.Println("Sorted array:", sortedNodes)
 	for i := range sortedNodes {
 		// sortedNodes[i] is a *Task; printing it shows the real Task address
-		fmt.Printf("Task pointer: %p → Next: %v\n", sortedNodes[i], sortedNodes[i].Next())
+		fmt.Printf("Task pointer: %p (%s)→ Next: %v\n", sortedNodes[i], sortedNodes[i].GetUid(), sortedNodes[i].Next())
 		sortedNodes[i].Execute()
 	}
 

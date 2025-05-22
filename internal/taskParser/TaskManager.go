@@ -1,6 +1,7 @@
 package taskParser
 
 import (
+	"io"
 	"maps"
 )
 
@@ -105,5 +106,27 @@ func (tm *TaskManager) getExecutionGraphNode(uid string) *DAGNode {
 }
 
 func (tm *TaskManager) SetGraph([]Task, []DAGNode) {
+
+}
+
+// Only creates pipes from this node's stdout to each of its next nodes' stdin
+func (tm *TaskManager) CreateForwardPipes(n1 DAGNode) {
+
+	destWriters := []io.Writer{}
+
+	for _, nextNode := range n1.GetNextUids() {
+		task := tm.GetTaskByUid(nextNode)
+		if task.GetReadStdin() && task.GetGiveStdout() {
+			pipeRead, pipeWrite := io.Pipe()
+			destWriters = append(destWriters, pipeWrite)
+			task.SetStdin(pipeRead)
+		}
+	}
+
+	t1 := tm.GetTaskByUid(n1.GetUid())
+	if t1.GetGiveStdout() && len(destWriters) > 0 {
+		multiWriter := io.MultiWriter(destWriters...)
+		t1.SetStdout(multiWriter)
+	}
 
 }

@@ -2,7 +2,6 @@ package taskParser
 
 import (
 	"github.com/BurntSushi/toml"
-	"maps"
 	"os"
 )
 
@@ -41,62 +40,6 @@ func (tf *TaskFile) GetTaskByUid(uid string) *TomlTask {
 	return nil
 }
 
-// NOTE: STILL NEEDS CYCLE DETECTION. HINT: LOOK FOR NO VALID ROOT NODES
-func GetTaskChain(tasks []*Task) []*Task {
-	orderedTasks := []*Task{}
-
-	incomingCountMap := make(map[*Task]int)
-	for i := range tasks {
-
-		_, thisTaskInMap := incomingCountMap[tasks[i]]
-		if !thisTaskInMap {
-			incomingCountMap[tasks[i]] = 0
-		}
-
-		for j := range tasks[i].Next() {
-			next := tasks[i].Next()
-			_, ok := incomingCountMap[next[j]]
-
-			if ok {
-				incomingCountMap[next[j]]++
-			} else {
-				incomingCountMap[next[j]] = 1
-			}
-		}
-	}
-
-	zeroIncomingNodesSet := make(map[*Task]struct{})
-	for k, v := range incomingCountMap {
-		if v == 0 {
-			zeroIncomingNodesSet[k] = struct{}{}
-		}
-	}
-	// Kahn's Algorithm: https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
-
-	inEdgesCounts := make(map[*Task]int)
-	maps.Copy(inEdgesCounts, incomingCountMap)
-	for len(zeroIncomingNodesSet) > 0 {
-		var pointer *Task
-		for k := range zeroIncomingNodesSet {
-			pointer = k
-			break
-		}
-
-		delete(zeroIncomingNodesSet, pointer)
-		orderedTasks = append(orderedTasks, pointer)
-		for _, next := range pointer.Next() {
-			_, ok := inEdgesCounts[next]
-			if ok {
-				inEdgesCounts[next]--
-			}
-			if inEdgesCounts[next] <= 0 {
-				zeroIncomingNodesSet[next] = struct{}{}
-			}
-		}
-	}
-	return orderedTasks
-}
-
 func GetTomlTaskArray[T any](path string, holderStruct *T) (*T, error) {
 	data, _ := os.ReadFile(path)
 	fileContents := string(data)
@@ -105,23 +48,22 @@ func GetTomlTaskArray[T any](path string, holderStruct *T) (*T, error) {
 	return holderStruct, err
 }
 
-func TomlTasksToTasks(arr []TomlTask) []*Task {
+func TomlTasksToTasks(arr []TomlTask) []Task {
 
 	// Task being waited for : Waiting task
-	toBeWired := make(map[string][]*Task)
+	toBeWired := make(map[string][]Task)
 
-	tasks := []*Task{}
+	tasks := []Task{}
 
 	for _, el := range arr {
-		nextTasks := []*Task{}
-		task := GetTask(
+		//nextTasks := []Task{}
+		task := GetSingleTask(
 			el.GetName(),
 			el.GetCommand(),
 			el.GetArgs(),
 			el.GetUid(),
 			uint64(el.GetTimeout()),
 			uint64(el.GetDelay()),
-			nextTasks,
 			el.GetGivestdout(),
 			el.GetReadstdin(),
 		)
@@ -137,20 +79,8 @@ func TomlTasksToTasks(arr []TomlTask) []*Task {
 				val = append(val, task)
 				toBeWired[nextUid] = val
 			} else {
-				val = []*Task{task}
+				val = []Task{task}
 				toBeWired[nextUid] = val
-			}
-		}
-	}
-
-	for _, el := range tasks {
-		waitingTasks, ok := toBeWired[el.GetUid()]
-
-		if !ok {
-			continue
-		} else {
-			for _, t := range waitingTasks {
-				t.AddNextTasks(el)
 			}
 		}
 	}
