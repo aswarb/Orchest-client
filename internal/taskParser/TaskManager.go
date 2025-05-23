@@ -8,12 +8,10 @@ import (
 type DAGNode struct {
 	uid      string
 	nextUids []string
-	prevUids []string // Prev only exists to make traversal easier, the nodes only execute from prev -> node -> next -> etc...
 }
 
 func (d DAGNode) GetUid() string        { return d.uid }
 func (d DAGNode) GetNextUids() []string { return d.nextUids }
-func (d DAGNode) GetPrevUids() []string { return d.prevUids }
 
 type TaskManager struct {
 	tasks map[string]Task
@@ -111,7 +109,6 @@ func (tm *TaskManager) SetGraph([]Task, []DAGNode) {
 
 // Only creates pipes from this node's stdout to each of its next nodes' stdin
 func (tm *TaskManager) CreateForwardPipes(n1 DAGNode) {
-
 	destWriters := []io.Writer{}
 
 	for _, nextNode := range n1.GetNextUids() {
@@ -128,5 +125,39 @@ func (tm *TaskManager) CreateForwardPipes(n1 DAGNode) {
 		multiWriter := io.MultiWriter(destWriters...)
 		t1.SetStdout(multiWriter)
 	}
+}
 
+func GetTaskManagerFromToml(arr []TomlTask) TaskManager {
+
+	tasks := make(map[string]Task)
+	graph := make(map[string]DAGNode)
+
+	for _, el := range arr {
+		var task Task
+		switch t := el.(type) {
+		case *SingleTomlTask:
+			task = GetSingleTask(
+				t.Name,
+				t.Command,
+				t.Args,
+				t.Uid,
+				uint64(t.Timeout),
+				uint64(t.Delay),
+				t.GiveStdout,
+				t.ReadStdin,
+			)
+		case *GroupTomlTask:
+		default:
+			continue
+		}
+		tasks[el.GetUid()] = task
+		graph[el.GetUid()] = DAGNode{uid: el.GetUid(), nextUids: el.GetNext()}
+	}
+
+	tm := TaskManager{
+		tasks: tasks,
+		graph: graph,
+	}
+
+	return tm
 }

@@ -1,11 +1,33 @@
 package taskParser
 
 import (
-	"github.com/BurntSushi/toml"
 	"os"
+	"regexp"
+
+	"github.com/BurntSushi/toml"
+	//"github.com/BurntSushi/toml"
 )
 
-type TomlTask struct {
+type TomlTask interface {
+	GetUid() string
+	GetNext() []string
+}
+
+type GroupTomlTask struct {
+	Uid        string   `toml:"uid"`
+	Name       string   `toml:"name"`
+	Members    []string `toml:"members"`
+	Timeout    int      `toml:"timeout"`
+	Delay      int      `toml:"delay"`
+	Next       []string `toml:"next"`
+	GiveStdout bool     `toml:"givestdout"`
+	ReadStdin  bool     `toml:"readstdin"`
+}
+
+func (t *GroupTomlTask) GetUid() string    { return t.Uid }
+func (t *GroupTomlTask) GetNext() []string { return t.Next }
+
+type SingleTomlTask struct {
 	Uid        string   `toml:"uid"`
 	Name       string   `toml:"name"`
 	Command    string   `toml:"command"`
@@ -13,77 +35,52 @@ type TomlTask struct {
 	Timeout    int      `toml:"timeout"`
 	Delay      int      `toml:"delay"`
 	Next       []string `toml:"next"`
-	Givestdout bool     `toml:"givestdout"`
-	Readstdin  bool     `toml:"readstdin"`
+	GiveStdout bool     `toml:"givestdout"`
+	ReadStdin  bool     `toml:"readstdin"`
 }
 
-func (t *TomlTask) GetUid() string      { return t.Uid }
-func (t *TomlTask) GetName() string     { return t.Name }
-func (t *TomlTask) GetCommand() string  { return t.Command }
-func (t *TomlTask) GetArgs() []string   { return t.Args }
-func (t *TomlTask) GetTimeout() int     { return t.Timeout }
-func (t *TomlTask) GetDelay() int       { return t.Delay }
-func (t *TomlTask) GetNext() []string   { return t.Next }
-func (t *TomlTask) GetGivestdout() bool { return t.Givestdout }
-func (t *TomlTask) GetReadstdin() bool  { return t.Readstdin }
+func (t *SingleTomlTask) GetUid() string    { return t.Uid }
+func (t *SingleTomlTask) GetNext() []string { return t.Next }
 
-type TaskFile struct {
-	Tasks []TomlTask `toml:"Task"`
-}
-
-func (tf *TaskFile) GetTaskByUid(uid string) *TomlTask {
-	for _, task := range tf.Tasks {
-		if task.Uid == uid {
-			return &task
-		}
-	}
-	return nil
-}
-
-func GetTomlTaskArray[T any](path string, holderStruct *T) (*T, error) {
+func GetTomlTaskArray(path string) []TomlTask {
 	data, _ := os.ReadFile(path)
 	fileContents := string(data)
 
-	_, err := toml.Decode(fileContents, holderStruct)
-	return holderStruct, err
-}
+	TableHeaderPattern, _ := regexp.Compile(`\[\[(Task|Group)\]\]`)
+	indices := TableHeaderPattern.FindAllStringIndex(fileContents, -1)
 
-func TomlTasksToTasks(arr []TomlTask) []Task {
+	blobs := make(map[string][]string)
+	for num, pair := range indices {
+		var blob string
+		if num == len(indices)-1 {
+			blob = fileContents[pair[1]:]
+		} else {
+			blob = fileContents[pair[1]:indices[num+1][0]]
+		}
+		header := fileContents[pair[0]:pair[1]]
+		_, ok := blobs[header]
+		if !ok {
+			blobs[header] = []string{}
+		}
+		blobs[header] = append(blobs[header], blob)
+	}
 
-	// Task being waited for : Waiting task
-	toBeWired := make(map[string][]Task)
-
-	tasks := []Task{}
-
-	for _, el := range arr {
-		//nextTasks := []Task{}
-		task := GetSingleTask(
-			el.GetName(),
-			el.GetCommand(),
-			el.GetArgs(),
-			el.GetUid(),
-			uint64(el.GetTimeout()),
-			uint64(el.GetDelay()),
-			el.GetGivestdout(),
-			el.GetReadstdin(),
-		)
-		tasks = append(tasks, task)
-
-		for _, nextUid := range el.GetNext() {
-			if nextUid == "" {
+	tasks := []TomlTask{}
+	for k, _ := range blobs {
+		for _, blob := range blobs[k] {
+			switch k {
+			case "[[Task]]":
+				var holder SingleTomlTask
+				_, _ = toml.Decode(blob, &holder)
+				tasks = append(tasks, &holder)
+			case "[[Group]]":
+				var holder GroupTomlTask
+				_, _ = toml.Decode(blob, &holder)
+				tasks = append(tasks, &holder)
+			default:
 				continue
-			}
-			val, ok := toBeWired[nextUid]
-
-			if ok {
-				val = append(val, task)
-				toBeWired[nextUid] = val
-			} else {
-				val = []Task{task}
-				toBeWired[nextUid] = val
 			}
 		}
 	}
-
 	return tasks
 }

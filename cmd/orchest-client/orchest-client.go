@@ -194,17 +194,21 @@ func main() {
 	wd, _ := os.Getwd()
 	tomlPath := fmt.Sprintf("%s%s", wd, "/internal/taskParser/TEMPLATE.orchest.task.toml")
 	fmt.Println(tomlPath)
-	var fileHolder taskParser.TaskFile
-	taskParser.GetTomlTaskArray(tomlPath, &fileHolder)
-	out := taskParser.TomlTasksToTasks(fileHolder.Tasks)
-	sortedNodes := taskParser.GetTaskChain(out)
-
-	fmt.Println("Sorted array:", sortedNodes)
-	for i := range sortedNodes {
-		// sortedNodes[i] is a *Task; printing it shows the real Task address
-		fmt.Printf("Task pointer: %p (%s)→ Next: %v\n", sortedNodes[i], sortedNodes[i].GetUid(), sortedNodes[i].Next())
-		sortedNodes[i].Execute()
+	tasks := taskParser.GetTomlTaskArray(tomlPath)
+	for _, task := range tasks {
+		fmt.Println(task)
 	}
+	fmt.Println(taskParser.GetTaskManagerFromToml(tasks))
+	//out := taskParser.TomlTasksToTasks(fileHolder.Tasks)
+	//fmt.Println(out)
+	//sortedNodes := taskParser.GetTaskChain(out)
+	/*
+		fmt.Println("Sorted array:", sortedNodes)
+		for i := range sortedNodes {
+			// sortedNodes[i] is a *Task; printing it shows the real Task address
+			fmt.Printf("Task pointer: %p (%s)→ Next: %v\n", sortedNodes[i], sortedNodes[i].GetUid(), sortedNodes[i].Next())
+			sortedNodes[i].Execute()
+		}*/
 
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")

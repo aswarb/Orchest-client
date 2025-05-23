@@ -35,8 +35,8 @@ type SingleTask struct {
 	command    *exec.Cmd
 	timeout    uint64
 	delay      uint64
-	givestdout bool
-	readstdin  bool
+	giveStdout bool
+	readStdin  bool
 }
 
 func (t *SingleTask) SetStdout(writer io.Writer) { t.command.Stdout = writer }
@@ -47,8 +47,8 @@ func (t *SingleTask) GetUid() string      { return t.uid }
 func (t *SingleTask) GetName() string     { return t.name }
 func (t *SingleTask) GetTimeout() uint64  { return t.timeout }
 func (t *SingleTask) GetDelay() uint64    { return t.delay }
-func (t *SingleTask) GetGiveStdout() bool { return t.givestdout }
-func (t *SingleTask) GetReadStdin() bool  { return t.readstdin }
+func (t *SingleTask) GetGiveStdout() bool { return t.giveStdout }
+func (t *SingleTask) GetReadStdin() bool  { return t.readStdin }
 
 func (t *SingleTask) ExecuteBlocking() {
 	t.command.Start()
@@ -59,11 +59,11 @@ func (t *SingleTask) Execute() {
 }
 
 func (t *SingleTask) WantsStdin() bool {
-	return t.readstdin
+	return t.readStdin
 }
 
 func (t *SingleTask) GivesStdout() bool {
-	return t.givestdout
+	return t.giveStdout
 }
 func (t *SingleTask) GetStdin() io.Reader {
 	return t.command.Stdin
@@ -71,6 +71,10 @@ func (t *SingleTask) GetStdin() io.Reader {
 
 func (t *SingleTask) GetStdout() io.Writer {
 	return t.command.Stdout
+}
+
+func (t *SingleTask) FillFromToml() {
+
 }
 
 func GetSingleTask(name string, executable string, args []string, uid string, timeout uint64,
@@ -84,14 +88,14 @@ func GetSingleTask(name string, executable string, args []string, uid string, ti
 		uid:        uid,
 		timeout:    timeout,
 		delay:      delay,
-		givestdout: givestdout,
-		readstdin:  readstdin,
+		giveStdout: givestdout,
+		readStdin:  readstdin,
 	}
 
 	return &task
 }
 
-// Topological sort of a Directed Acyclic Graph
+// Toplogical sort of a Directed Acyclic Graph
 func GetSerialExecuteOrder(startingNode *Task) {
 
 }
