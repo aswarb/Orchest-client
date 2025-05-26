@@ -198,17 +198,8 @@ func main() {
 	for _, task := range tasks {
 		fmt.Println(task)
 	}
-	fmt.Println(taskParser.GetTaskManagerFromToml(tasks))
-	//out := taskParser.TomlTasksToTasks(fileHolder.Tasks)
-	//fmt.Println(out)
-	//sortedNodes := taskParser.GetTaskChain(out)
-	/*
-		fmt.Println("Sorted array:", sortedNodes)
-		for i := range sortedNodes {
-			// sortedNodes[i] is a *Task; printing it shows the real Task address
-			fmt.Printf("Task pointer: %p (%s)→ Next: %v\n", sortedNodes[i], sortedNodes[i].GetUid(), sortedNodes[i].Next())
-			sortedNodes[i].Execute()
-		}*/
+	taskManager := taskParser.GetTaskManagerFromToml(tasks)
+	taskManager.ExecuteTaskProcess()
 
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")

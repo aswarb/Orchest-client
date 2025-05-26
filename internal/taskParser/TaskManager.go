@@ -1,9 +1,15 @@
 package taskParser
 
 import (
+	"fmt"
 	"io"
 	"maps"
 )
+
+func MapHasKey[K comparable, V any](m map[K]V, key K) bool {
+	_, ok := m[key]
+	return ok
+}
 
 type DAGNode struct {
 	uid      string
@@ -18,7 +24,36 @@ type TaskManager struct {
 	graph map[string]DAGNode
 }
 
-func (tm *TaskManager) executeTaskProcess() {}
+func (tm *TaskManager) ExecuteTaskProcess() {
+
+	sequence := tm.GetTaskSequence()
+	startedTasks := make(map[string]struct{})
+	for _, task := range sequence {
+		// TODO: Validation that no task reads from stdin without a task writing to stdout
+		giveStdout := task.GetGiveStdout()
+		node, ok := tm.GetExecutionGraphNode(task.GetUid())
+		if !ok {
+			continue
+		}
+		tm.CreateForwardPipes(*node)
+		if !MapHasKey(startedTasks, task.GetUid()) {
+			fmt.Println("Starting", task.GetUid())
+			task.Execute()
+			startedTasks[task.GetUid()] = struct{}{}
+		}
+		for _, nextUid := range node.GetNextUids() {
+			next, ok := tm.GetTaskByUid(nextUid)
+			if ok && giveStdout && next.GetReadStdin() {
+				if !MapHasKey(startedTasks, next.GetUid()) {
+					next.Execute()
+					startedTasks[next.GetUid()] = struct{}{}
+				}
+			}
+		}
+
+	}
+
+}
 
 func (tm *TaskManager) GetTaskMap() map[string]Task {
 	return tm.tasks
@@ -27,21 +62,27 @@ func (tm *TaskManager) GetTaskMap() map[string]Task {
 func (tm *TaskManager) GetExecutionGraphMap() map[string]DAGNode {
 	return tm.graph
 }
-func (tm *TaskManager) StartTaskChain() {
-
-}
-
 func (tm *TaskManager) CountIncomingEdges() map[string]int {
 	incomingEdgeCounts := make(map[string]int)
+	nodes := tm.GetExecutionGraphMap()
 	for _, task := range tm.GetExecutionGraphMap() {
 		uid := task.GetUid()
-		_, ok := incomingEdgeCounts[uid]
-		if !ok {
+		node := nodes[uid]
+		_, taskUidInMap := incomingEdgeCounts[uid]
+		if !taskUidInMap {
 			incomingEdgeCounts[uid] = 0
 		}
-		incomingEdgeCounts[uid]++
-	}
+		for _, nextUid := range node.GetNextUids() {
+			_, nextUidInMap := incomingEdgeCounts[nextUid]
+			if nextUidInMap {
+				incomingEdgeCounts[nextUid]++
+			} else {
+				incomingEdgeCounts[nextUid] = 1
+			}
+		}
 
+	}
+	fmt.Println(incomingEdgeCounts)
 	return incomingEdgeCounts
 }
 
@@ -51,12 +92,11 @@ func (tm *TaskManager) GetTaskSequence() []Task {
 	incomingEdgeCounts := tm.CountIncomingEdges()
 	zeroDegreeNodesSet := make(map[Task]struct{})
 	for uid, count := range incomingEdgeCounts {
-		task := tm.GetTaskByUid(uid)
-		if count == 0 && task != nil {
+		task, ok := tm.GetTaskByUid(uid)
+		if ok && count == 0 {
 			zeroDegreeNodesSet[task] = struct{}{}
 		}
 	}
-
 	// Kahn's Algorithm: https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
 	inEdgesCounts := make(map[string]int)
 	maps.Copy(inEdgesCounts, incomingEdgeCounts)
@@ -69,37 +109,36 @@ func (tm *TaskManager) GetTaskSequence() []Task {
 
 		delete(zeroDegreeNodesSet, pointer)
 		orderedTasks = append(orderedTasks, pointer)
-		node := tm.getExecutionGraphNode(pointer.GetUid())
+		node, ok := tm.GetExecutionGraphNode(pointer.GetUid())
+		if !ok {
+			continue
+		}
 		for _, next := range node.GetNextUids() {
 			_, ok := inEdgesCounts[next]
 			if ok {
 				inEdgesCounts[next]--
 			}
 			if inEdgesCounts[next] <= 0 {
-				zeroDegreeNodesSet[tm.GetTaskByUid(next)] = struct{}{}
+				task, ok := tm.GetTaskByUid(next)
+				if !ok {
+					continue
+				}
+				zeroDegreeNodesSet[task] = struct{}{}
 			}
 		}
 	}
 	return orderedTasks
-
 }
 
-func (tm *TaskManager) GetTaskByUid(uid string) Task {
+func (tm *TaskManager) GetTaskByUid(uid string) (Task, bool) {
 	task, ok := tm.GetTaskMap()[uid]
-
-	if ok {
-		return task
-	}
-	return nil
+	return task, ok
 }
 
-func (tm *TaskManager) getExecutionGraphNode(uid string) *DAGNode {
+func (tm *TaskManager) GetExecutionGraphNode(uid string) (*DAGNode, bool) {
 	node, ok := tm.GetExecutionGraphMap()[uid]
 
-	if ok {
-		return &node
-	}
-	return nil
+	return &node, ok
 
 }
 
@@ -112,7 +151,10 @@ func (tm *TaskManager) CreateForwardPipes(n1 DAGNode) {
 	destWriters := []io.Writer{}
 
 	for _, nextNode := range n1.GetNextUids() {
-		task := tm.GetTaskByUid(nextNode)
+		task, ok := tm.GetTaskByUid(nextNode)
+		if !ok {
+			continue
+		}
 		if task.GetReadStdin() && task.GetGiveStdout() {
 			pipeRead, pipeWrite := io.Pipe()
 			destWriters = append(destWriters, pipeWrite)
@@ -120,8 +162,8 @@ func (tm *TaskManager) CreateForwardPipes(n1 DAGNode) {
 		}
 	}
 
-	t1 := tm.GetTaskByUid(n1.GetUid())
-	if t1.GetGiveStdout() && len(destWriters) > 0 {
+	t1, ok := tm.GetTaskByUid(n1.GetUid())
+	if ok && t1.GetGiveStdout() && len(destWriters) > 0 {
 		multiWriter := io.MultiWriter(destWriters...)
 		t1.SetStdout(multiWriter)
 	}
