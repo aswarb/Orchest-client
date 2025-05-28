@@ -1,9 +1,11 @@
-package taskParser
+package task
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"maps"
+	wp "orchest-client/internal/workerpool"
 )
 
 func MapHasKey[K comparable, V any](m map[K]V, key K) bool {
@@ -24,8 +26,19 @@ type TaskManager struct {
 	graph map[string]DAGNode
 }
 
-func (tm *TaskManager) ExecuteTaskProcess() {
+func (tm *TaskManager) BetterExecuteTaskProcess() error {
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	workerpool := wp.MakeWorkerPool(ctx)
 
+	workerpool.AddWorkers(uint(1))
+
+
+
+	cancelFunc()
+	return nil
+}
+
+func (tm *TaskManager) ExecuteTaskProcess() error {
 	sequence := tm.GetTaskSequence()
 	startedTasks := make(map[string]struct{})
 	for _, task := range sequence {
@@ -43,16 +56,18 @@ func (tm *TaskManager) ExecuteTaskProcess() {
 		}
 		for _, nextUid := range node.GetNextUids() {
 			next, ok := tm.GetTaskByUid(nextUid)
-			if ok && giveStdout && next.GetReadStdin() {
+			if ok && next.GetReadStdin() && !giveStdout {
+				return fmt.Errorf("Error. Task %s Tried to read from stdin without Task %s giving stdout", task.GetUid(), next.GetUid())
+			}
+			if giveStdout && ok && next.GetReadStdin() {
 				if !MapHasKey(startedTasks, next.GetUid()) {
 					next.Execute()
 					startedTasks[next.GetUid()] = struct{}{}
 				}
 			}
 		}
-
 	}
-
+	return nil
 }
 
 func (tm *TaskManager) GetTaskMap() map[string]Task {
@@ -188,7 +203,8 @@ func GetTaskManagerFromToml(arr []TomlTask) TaskManager {
 				t.GiveStdout,
 				t.ReadStdin,
 			)
-		case *GroupTomlTask:
+		case *ParallelTomlTask:
+			//
 		default:
 			continue
 		}

@@ -7,7 +7,7 @@ import (
 	"net"
 	"net/http"
 	"orchest-client/internal/api"
-	"orchest-client/internal/taskParser"
+	"orchest-client/internal/task"
 	"os"
 	"os/signal"
 	"strconv"
@@ -192,13 +192,13 @@ func main() {
 		}
 	}()
 	wd, _ := os.Getwd()
-	tomlPath := fmt.Sprintf("%s%s", wd, "/internal/taskParser/TEMPLATE.orchest.task.toml")
+	tomlPath := fmt.Sprintf("%s%s", wd, "/internal/task/TEMPLATE.orchest.task.toml")
 	fmt.Println(tomlPath)
-	tasks := taskParser.GetTomlTaskArray(tomlPath)
+	tasks := task.GetTomlTaskArray(tomlPath)
 	for _, task := range tasks {
 		fmt.Println(task)
 	}
-	taskManager := taskParser.GetTaskManagerFromToml(tasks)
+	taskManager := task.GetTaskManagerFromToml(tasks)
 	taskManager.ExecuteTaskProcess()
 
 	<-sigChan

@@ -1,4 +1,4 @@
-package taskParser
+package task
 
 import (
 	"io"

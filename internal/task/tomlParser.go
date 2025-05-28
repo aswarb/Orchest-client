@@ -1,31 +1,38 @@
-package taskParser
+package task
 
 import (
+	"fmt"
+	"orchest-client/templates/task"
 	"os"
 	"regexp"
-
 	"github.com/BurntSushi/toml"
-	//"github.com/BurntSushi/toml"
 )
 
 type TomlTask interface {
 	GetUid() string
 	GetNext() []string
+	ToString() string
 }
 
-type GroupTomlTask struct {
+
+
+type ParallelTomlTask struct {
 	Uid        string   `toml:"uid"`
 	Name       string   `toml:"name"`
 	Members    []string `toml:"members"`
-	Timeout    int      `toml:"timeout"`
-	Delay      int      `toml:"delay"`
 	Next       []string `toml:"next"`
 	GiveStdout bool     `toml:"givestdout"`
 	ReadStdin  bool     `toml:"readstdin"`
 }
 
-func (t *GroupTomlTask) GetUid() string    { return t.Uid }
-func (t *GroupTomlTask) GetNext() []string { return t.Next }
+func (t *ParallelTomlTask) GetUid() string    { return t.Uid }
+func (t *ParallelTomlTask) GetNext() []string { return t.Next }
+func (t *ParallelTomlTask) ToString() string {
+	template,_ := taskTemplate.GetTemplate(taskTemplate.PARALLEL_TASK)
+	fmt.Println(template)
+	return string(template)
+
+}
 
 type SingleTomlTask struct {
 	Uid        string   `toml:"uid"`
@@ -41,12 +48,18 @@ type SingleTomlTask struct {
 
 func (t *SingleTomlTask) GetUid() string    { return t.Uid }
 func (t *SingleTomlTask) GetNext() []string { return t.Next }
+func (t *SingleTomlTask) ToString() string  { 
+template,_ := taskTemplate.GetTemplate(taskTemplate.SINGLE_TASK)
+	fmt.Println(template)
+	return string(template)
+
+}
 
 func GetTomlTaskArray(path string) []TomlTask {
 	data, _ := os.ReadFile(path)
 	fileContents := string(data)
 
-	TableHeaderPattern, _ := regexp.Compile(`\[\[(Task|Group)\]\]`)
+	TableHeaderPattern, _ := regexp.Compile(`\[\[(Task|Parallel)\]\]`)
 	indices := TableHeaderPattern.FindAllStringIndex(fileContents, -1)
 
 	blobs := make(map[string][]string)
@@ -73,8 +86,8 @@ func GetTomlTaskArray(path string) []TomlTask {
 				var holder SingleTomlTask
 				_, _ = toml.Decode(blob, &holder)
 				tasks = append(tasks, &holder)
-			case "[[Group]]":
-				var holder GroupTomlTask
+			case "[[Parallel]]":
+				var holder ParallelTomlTask
 				_, _ = toml.Decode(blob, &holder)
 				tasks = append(tasks, &holder)
 			default:

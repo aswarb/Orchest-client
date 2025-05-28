@@ -1,0 +1,10 @@
+[[Task]]
+uid = "t001"
+name = "task 1"
+command = "/usr/bin/notify-send"
+args = ["\"this is task 1\""]
+timeout = 3000
+delay = 200
+next = []
+givestdout = false
+readstdin = false
