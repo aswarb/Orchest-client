@@ -11,7 +11,7 @@ var TaskTemplate embed.FS
 type TaskType string
 
 const (
-	SINGLE_TASK TaskType = "Single"
+	SINGLE_TASK   TaskType = "Single"
 	PARALLEL_TASK TaskType = "Parallel"
 )
 

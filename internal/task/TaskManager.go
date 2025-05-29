@@ -6,7 +6,18 @@ import (
 	"io"
 	"maps"
 	wp "orchest-client/internal/workerpool"
+	"sync"
 )
+
+func FilterMap[K comparable, V any](m map[K]V, isValid func(K, V) bool) map[K]V {
+	result := make(map[K]V)
+	for k, v := range m {
+		if isValid(k, v) {
+			result[k] = v
+		}
+	}
+	return result
+}
 
 func MapHasKey[K comparable, V any](m map[K]V, key K) bool {
 	_, ok := m[key]
@@ -26,16 +37,121 @@ type TaskManager struct {
 	graph map[string]DAGNode
 }
 
+type ParallelTaskArgs struct {
+	startUid   string
+	currentUid string
+}
+
+func (p ParallelTaskArgs) IsTask() bool {
+	return true
+}
+
+func (tm *TaskManager) executeTask(task Task) {
+
+}
+
 func (tm *TaskManager) BetterExecuteTaskProcess() error {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	workerpool := wp.MakeWorkerPool(ctx)
-
 	workerpool.AddWorkers(uint(1))
 
+	sequence := tm.GetTaskSequence()
+	startedTasks := make(map[string]struct{})
 
+	for _, task := range sequence {
+		giveStdout := task.GetGiveStdout()
+		node, ok := tm.GetExecutionGraphNode(task.GetUid())
+		if !ok || MapHasKey(startedTasks, task.GetUid()) {
+			continue
+		}
+		switch task.(type) {
+		case *SingleTask:
+			tm.CreateForwardPipes(*node)
+			task.Execute()
+			startedTasks[task.GetUid()] = struct{}{}
+			for _, nextUid := range node.GetNextUids() {
+				next, ok := tm.GetTaskByUid(nextUid)
+				if ok && next.GetReadStdin() && !giveStdout {
+					return fmt.Errorf("Error. Task %s Tried to read from stdin without Task %s giving stdout", task.GetUid(), next.GetUid())
+				}
+				if giveStdout && ok && next.GetReadStdin() {
+					if !MapHasKey(startedTasks, next.GetUid()) {
+						next.Execute()
+						startedTasks[next.GetUid()] = struct{}{}
+					}
+				}
+			}
+
+		case *ParallelTask:
+
+			nodeCounts := tm.CountIncomingEdges()
+			convergencesCounts := FilterMap(nodeCounts, func(k string, v int) bool { return v >= 1 })
+
+			convergenceUids := []string{}
+			convergenceMutex := sync.RWMutex{}
+
+			for k, _ := range convergencesCounts {
+				convergenceUids = append(convergenceUids, k)
+			}
+
+			onParallelExecute := func(w *wp.Worker, wt *wp.WorkerTask) error {
+				args := wt.Args.(*ParallelTaskArgs)
+				var node *DAGNode
+				node, _ = tm.GetExecutionGraphNode(args.startUid)
+				args.currentUid = node.GetUid()
+				for len(node.GetNextUids()) != 1 {
+					task, _ := tm.GetTaskByUid(node.GetUid())
+					task.Execute()
+					node, _ = tm.GetExecutionGraphNode(node.GetNextUids()[0])
+					args.currentUid = node.GetUid()
+				}
+				return nil
+			}
+			onParallelComplete := func(w *wp.Worker, wt *wp.WorkerTask) {
+
+				args := wt.Args.(*ParallelTaskArgs)
+				node, _ := tm.GetExecutionGraphNode(args.currentUid)
+				nextUids := node.GetNextUids()
+				if len(nextUids) < 1 {
+					// Leaf node case
+				} else if len(nextUids) > 1 {
+					// Path diverges case
+					newTask := wp.WorkerTask{
+						Args:       ParallelTaskArgs{startUid: node.GetUid(), currentUid: ""},
+						Execute:    wt.Execute,
+						OnComplete: wt.OnComplete,
+						OnError:    wt.OnError,
+					}
+					workerpool.AddTask(&newTask)
+				}
+			}
+			parallelExecutionWpTask := wp.WorkerTask{
+				Args:       ParallelTaskArgs{startUid: node.GetUid(), currentUid: ""},
+				Execute:    onParallelExecute,
+				OnComplete: onParallelComplete,
+				OnError:    func(*wp.Worker, *wp.WorkerTask, error) {},
+			}
+
+			workerpool.AddTask(&parallelExecutionWpTask)
+		}
+	}
 
 	cancelFunc()
 	return nil
+}
+
+func (tm *TaskManager) getNextBranchPoint(startNode *DAGNode) string {
+	var nextNode *DAGNode = startNode
+	var next []string = startNode.GetNextUids()
+	for true {
+		nextNode, _ = tm.GetExecutionGraphNode(nextNode.GetUid())
+
+		next = nextNode.GetNextUids()
+		if len(next) != 1 {
+			return nextNode.GetUid()
+		}
+	}
+	return ""
 }
 
 func (tm *TaskManager) ExecuteTaskProcess() error {

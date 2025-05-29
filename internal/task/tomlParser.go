@@ -2,10 +2,10 @@ package task
 
 import (
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"orchest-client/templates/task"
 	"os"
 	"regexp"
-	"github.com/BurntSushi/toml"
 )
 
 type TomlTask interface {
@@ -13,8 +13,6 @@ type TomlTask interface {
 	GetNext() []string
 	ToString() string
 }
-
-
 
 type ParallelTomlTask struct {
 	Uid        string   `toml:"uid"`
@@ -28,7 +26,7 @@ type ParallelTomlTask struct {
 func (t *ParallelTomlTask) GetUid() string    { return t.Uid }
 func (t *ParallelTomlTask) GetNext() []string { return t.Next }
 func (t *ParallelTomlTask) ToString() string {
-	template,_ := taskTemplate.GetTemplate(taskTemplate.PARALLEL_TASK)
+	template, _ := taskTemplate.GetTemplate(taskTemplate.PARALLEL_TASK)
 	fmt.Println(template)
 	return string(template)
 
@@ -48,8 +46,8 @@ type SingleTomlTask struct {
 
 func (t *SingleTomlTask) GetUid() string    { return t.Uid }
 func (t *SingleTomlTask) GetNext() []string { return t.Next }
-func (t *SingleTomlTask) ToString() string  { 
-template,_ := taskTemplate.GetTemplate(taskTemplate.SINGLE_TASK)
+func (t *SingleTomlTask) ToString() string {
+	template, _ := taskTemplate.GetTemplate(taskTemplate.SINGLE_TASK)
 	fmt.Println(template)
 	return string(template)
 

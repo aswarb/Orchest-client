@@ -19,7 +19,7 @@ type Task interface {
 	SetStdout(io.Writer)
 }
 
-type GroupTask struct {
+type ParallelTask struct {
 	uid        string
 	name       string
 	taskChain  []Task
