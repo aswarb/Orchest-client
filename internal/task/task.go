@@ -1,101 +1,86 @@
 package task
 
 import (
-	"io"
-	"os/exec"
+	"strings"
 )
 
-type Task interface {
-	ExecuteBlocking()
-	Execute()
-	GetUid() string
-	GetTimeout() uint64
-	GetDelay() uint64
-	GetGiveStdout() bool
-	GetReadStdin() bool
-	GetStdin() io.Reader
-	SetStdin(io.Reader)
-	GetStdout() io.Writer
-	SetStdout(io.Writer)
+type Task struct {
+	uid           string
+	Name          string
+	CommandString string
+	Timeout       uint64
+	Delay         uint64
+	next          []string
+	GiveStdout    bool
+	ReadStdin     bool
 }
 
-type ParallelTask struct {
-	uid        string
-	name       string
-	taskChain  []Task
-	timeout    uint64
-	delay      uint64
-	givestdout bool
-	readstdin  bool
+func (t *Task) GetUid() string {
+	return t.uid
+}
+func (t *Task) GetNext() []string {
+	return t.next
 }
 
-type SingleTask struct {
-	uid        string
-	name       string
-	command    *exec.Cmd
-	timeout    uint64
-	delay      uint64
-	giveStdout bool
-	readStdin  bool
+func (t *Task) AddNextUid(uid string) {
+	t.next = append(t.next, uid)
 }
 
-func (t *SingleTask) SetStdout(writer io.Writer) { t.command.Stdout = writer }
-func (t *SingleTask) SetStdin(reader io.Reader)  { t.command.Stdin = reader }
-
-func (t *SingleTask) GetCmd() *exec.Cmd   { return t.command }
-func (t *SingleTask) GetUid() string      { return t.uid }
-func (t *SingleTask) GetName() string     { return t.name }
-func (t *SingleTask) GetTimeout() uint64  { return t.timeout }
-func (t *SingleTask) GetDelay() uint64    { return t.delay }
-func (t *SingleTask) GetGiveStdout() bool { return t.giveStdout }
-func (t *SingleTask) GetReadStdin() bool  { return t.readStdin }
-
-func (t *SingleTask) ExecuteBlocking() {
-	t.command.Start()
+func (t *Task) SetNextUids(uids []string) {
+	t.next = uids
 }
 
-func (t *SingleTask) Execute() {
-	t.command.Run()
+type ParallelSegment struct {
+	uid       string
+	Name      string
+	startUids []string
+	endUids   []string
 }
 
-func (t *SingleTask) WantsStdin() bool {
-	return t.readStdin
+func (t *Task) AddMemberUid(uid string) {
+	t.next = append(t.next, uid)
 }
 
-func (t *SingleTask) GivesStdout() bool {
-	return t.giveStdout
-}
-func (t *SingleTask) GetStdin() io.Reader {
-	return t.command.Stdin
+func (t *Task) SetMemberUids(uids []string) {
+	t.next = uids
 }
 
-func (t *SingleTask) GetStdout() io.Writer {
-	return t.command.Stdout
-}
+func (p *ParallelSegment) GetUid() string            { return p.uid }
+func (p *ParallelSegment) GetMemberUids() []string   { return p.startUids }
+func (p *ParallelSegment) GetEndpointUids() []string { return p.endUids }
 
-func (t *SingleTask) FillFromToml() {
+func GetTask(uid string, name string, executable string, args []string, timeout uint64,
+	delay uint64, nextUids []string, givestdout bool, readstdin bool) *Task {
 
-}
+	toJoin := []string{executable}
+	for _, a := range args {
+		toJoin = append(toJoin, a)
+	}
+	cmd := strings.Join(toJoin, " ")
 
-func GetSingleTask(name string, executable string, args []string, uid string, timeout uint64,
-	delay uint64, givestdout bool, readstdin bool) *SingleTask {
+	task := Task{
 
-	cmd := exec.Command(executable, args...)
-
-	task := SingleTask{
-		name:       name,
-		command:    cmd,
-		uid:        uid,
-		timeout:    timeout,
-		delay:      delay,
-		giveStdout: givestdout,
-		readStdin:  readstdin,
+		uid:           uid,
+		Name:          name,
+		CommandString: cmd,
+		Timeout:       timeout,
+		Delay:         delay,
+		next:          nextUids,
+		GiveStdout:    givestdout,
+		ReadStdin:     readstdin,
 	}
 
 	return &task
 }
 
-// Toplogical sort of a Directed Acyclic Graph
-func GetSerialExecuteOrder(startingNode *Task) {
+func GetParallelSegment(uid string, name string, startUids []string, endUids []string) *ParallelSegment {
 
+	segment := ParallelSegment{
+		uid:       uid,
+		Name:      name,
+		startUids: startUids,
+		endUids:   endUids,
+	}
+
+	return &segment
 }
