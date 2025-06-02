@@ -1,7 +1,6 @@
 package task
 
 import (
-// wp "orchest-client/internal/workerpool"
 )
 
 func FilterMap[K comparable, V any](m map[K]V, isValid func(K, V) bool) map[K]V {
@@ -29,4 +28,3 @@ func (t *TaskManager) startTask() {
 	//
 }
 
-// TBC...

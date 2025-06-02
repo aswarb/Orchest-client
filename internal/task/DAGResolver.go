@@ -150,3 +150,9 @@ func (d *DAGResolver) CountIncomingEdges() map[string]int {
 	}
 	return counts
 }
+
+func (d *DAGResolver) GetSegments(nUid string) (map[string]struct{}, bool) {
+	segments, ok := d.segmentRevMap[nUid]
+
+	return segments, ok
+}
