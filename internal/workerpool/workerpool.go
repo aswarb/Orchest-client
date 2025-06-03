@@ -2,6 +2,7 @@ package workerpool
 
 import (
 	"context"
+	"fmt"
 )
 
 type TaskArgs interface {
@@ -85,6 +86,25 @@ func (p *WorkerPool) AddWorkers(num uint) {
 		}
 		p.allWorkers = append(p.allWorkers, newWorker)
 	}
+}
+
+func (p *WorkerPool) GetWorkerCount() int { return len(p.allWorkers) }
+
+func (p *WorkerPool) RemoveWorkers(n int) error {
+	if len(p.allWorkers) > n {
+		return fmt.Errorf("Cannot remove %d workers, pool only contains %d workers total", n, len(p.allWorkers))
+	}
+
+	toRemove := p.allWorkers[:n]
+	toKeep := p.allWorkers[n:]
+
+	p.allWorkers = toKeep
+
+	for _, workerPointer := range toRemove {
+		workerPointer.Stop()
+	}
+
+	return nil
 }
 
 func (p *WorkerPool) StartWork(parentContext context.Context) {
