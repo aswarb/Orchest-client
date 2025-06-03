@@ -1,7 +1,6 @@
 package task
 
-import (
-)
+import ()
 
 func FilterMap[K comparable, V any](m map[K]V, isValid func(K, V) bool) map[K]V {
 	result := make(map[K]V)
@@ -27,4 +26,3 @@ type TaskManager struct {
 func (t *TaskManager) startTask() {
 	//
 }
-

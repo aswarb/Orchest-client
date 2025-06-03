@@ -150,12 +150,72 @@ func (t *TaskEngine) executeParallelTask(segmentUid string) {
 func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	args := wt.Args.(*ParallelTaskArgs)
 	node, _ := t.resolver.GetNode(args.startUid)
-	args.currentUid = node.GetUid()
+	task := node.(*Task)
+	//segment, _ := t.resolver.GetSegment(args.segmentUid)
 
+	args.currentUid = task.GetUid()
+
+	cmd, _ := t.cmdMap[task.GetUid()]
+
+	args.outputChan <- &taskStartedPacket{uid: task.GetUid()}
+	if task.ReadStdin || task.GiveStdout {
+		if task.ReadStdin {
+			_, bufferExists := t.taskStdinBuffers[task.GetUid()]
+			if bufferExists {
+				// start routine to push contents from buffer into stdin of process
+			}
+		}
+		// check next task
+		// if task.ReadStdin: create buffer for each nextUid. Create routine to read from stdout and push it to each buffer
+		cmd.Start()
+	} else {
+		cmd.Run()
+
+	}
+
+	return nil
+}
+func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
+
+	incomingEdgeCounts := t.resolver.CountIncomingEdges()
+	filterFunc := func(k string, v int) bool { return v > 1 }
+	conergencePoints := FilterMap(incomingEdgeCounts, filterFunc)
+	args := wt.Args.(*ParallelTaskArgs)
+	node, _ := t.resolver.GetNode(args.startUid)
 	nextNodes := node.GetNext()
 	if len(nextNodes) > 1 {
-		for i, uid := range nextNodes {
-			// Do something...
+		for _, uid := range nextNodes {
+			args := ParallelTaskArgs{
+				startUid:   args.startUid,
+				currentUid: uid,
+				segmentUid: args.segmentUid,
+				endUids:    args.endUids,
+				outputChan: args.outputChan,
+			}
+			nextTask := wp.WorkerTask{
+				Args:       args,
+				Execute:    t.onParallelExecute,
+				OnComplete: t.onParallelComplete,
+				OnError:    t.onParallelError,
+			}
+
+			_, isConvergence := conergencePoints[uid]
+
+			if isConvergence {
+				replyChannel := make(chan bool)
+				req := proceedRequestPacket{
+					thisUid:      node.GetUid(),
+					targetUid:    uid,
+					replyChannel: replyChannel,
+				}
+				args.outputChan <- &req
+				response := <-replyChannel
+				if response == true {
+					w.GetTaskChan() <- &nextTask
+				}
+			} else {
+				w.GetTaskChan() <- &nextTask
+			}
 		}
 	} else if len(nextNodes) == 1 {
 
@@ -181,7 +241,5 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	completePacket := taskCompletePacket{uid: args.currentUid}
 	args.outputChan <- &completePacket
 
-	return nil
 }
-func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask)         {}
 func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error) {}
