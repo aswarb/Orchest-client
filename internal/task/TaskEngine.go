@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"io"
 	wp "orchest-client/internal/workerpool"
 	"os/exec"
 )
@@ -49,7 +50,9 @@ func (p *bufferDataPacket) getData() []byte   { return p.data }
 type TaskEngine struct {
 	resolver         *DAGResolver
 	cmdMap           map[string]*exec.Cmd
-	taskStdinBuffers map[string]chan []byte
+	taskStdinBuffers map[string]map[string]chan []byte
+	stdoutReaders    map[string]io.Reader
+	stdinWriter      map[string]io.Writer
 }
 type ParallelTaskArgs struct {
 	startUid   string
@@ -154,6 +157,46 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	//segment, _ := t.resolver.GetSegment(args.segmentUid)
 
 	args.currentUid = task.GetUid()
+
+	stdoutConsumerFunc := func(receivingUid string, sendingUid string, ctx context.Context) {
+		reader, readerExists := t.stdoutReaders[task.uid]
+		if !readerExists {
+			return
+		}
+
+		readCloser := (reader).(io.ReadCloser)
+		defer readCloser.Close()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				buf := make([]byte, 4096)
+				n, err := readCloser.Read(buf)
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					return
+				}
+				if _, ok := t.taskStdinBuffers[receivingUid]; !ok {
+					t.taskStdinBuffers[receivingUid] = make(map[string]chan []byte)
+				}
+				if _, ok := t.taskStdinBuffers[receivingUid][sendingUid]; !ok {
+					t.taskStdinBuffers[receivingUid][sendingUid] = make(chan []byte)
+				}
+				channel, _ := t.taskStdinBuffers[receivingUid][sendingUid]
+				select {
+				case channel <- buf[:n]:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
+
+	stdinChannelConsumerFunc := func(receivingUid string, ctx context.Context) {
+
+	}
 
 	cmd, _ := t.cmdMap[task.GetUid()]
 
