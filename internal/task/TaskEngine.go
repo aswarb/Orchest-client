@@ -60,6 +60,7 @@ type ParallelTaskArgs struct {
 	segmentUid string
 	endUids    []string
 	outputChan chan packet
+	context    context.Context
 }
 
 func (p ParallelTaskArgs) IsTask() bool { return true }
@@ -76,7 +77,7 @@ func (t *TaskEngine) executeSingleTask(taskUid string) {
 	// Do something ...
 }
 
-func (t *TaskEngine) executeParallelTask(segmentUid string) {
+func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	segment, _ := t.resolver.GetSegment(segmentUid)
@@ -136,6 +137,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string) {
 		segmentUid: segment.GetUid(),
 		endUids:    segment.GetEndpointUids(),
 		outputChan: outputChannel,
+		context:    ctx,
 	}
 	parallelExecuteTask := wp.WorkerTask{
 		Args:       args,
@@ -158,103 +160,16 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 
 	args.currentUid = task.GetUid()
 
-	stdoutConsumerFunc := func(receivingUid string, sendingUid string, ctx context.Context) {
-		reader, readerExists := t.stdoutReaders[sendingUid]
-		if !readerExists {
-			return
-		}
-
-		readCloser := (reader).(io.ReadCloser)
-		defer readCloser.Close()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				buf := make([]byte, 4096)
-				n, err := readCloser.Read(buf)
-				if err == io.EOF {
-
-					if _, ok := t.taskStdinBuffers[receivingUid]; !ok {
-						t.taskStdinBuffers[receivingUid] = make(map[string]chan []byte)
-					}
-					if _, ok := t.taskStdinBuffers[receivingUid][sendingUid]; !ok {
-						t.taskStdinBuffers[receivingUid][sendingUid] = make(chan []byte)
-					}
-					channel, _ := t.taskStdinBuffers[receivingUid][sendingUid]
-					channel <- nil
-					break
-				} else if err != nil {
-					return
-				}
-				if _, ok := t.taskStdinBuffers[receivingUid]; !ok {
-					t.taskStdinBuffers[receivingUid] = make(map[string]chan []byte)
-				}
-				if _, ok := t.taskStdinBuffers[receivingUid][sendingUid]; !ok {
-					t.taskStdinBuffers[receivingUid][sendingUid] = make(chan []byte)
-				}
-				channel, _ := t.taskStdinBuffers[receivingUid][sendingUid]
-				select {
-				case channel <- buf[:n]:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}
-
-	stdinChannelConsumerFunc := func(receivingUid string, ctx context.Context) {
-		writer, writerExists := t.stdinWriters[receivingUid]
-		if !writerExists {
-			return
-		}
-		writeCloser := writer.(io.WriteCloser)
-		defer writeCloser.Close()
-
-		exhaustedBuffers := make(map[string]struct{})
-		for {
-			bufferSet, bufferSetExists := t.taskStdinBuffers[receivingUid]
-			if !bufferSetExists {
-				return
-			}
-			allExhausted := true // Assume no data in buffer
-			for senderUid, buffer := range bufferSet {
-				if _, ok := exhaustedBuffers[senderUid]; ok {
-					continue
-				}
-				select {
-				case <-ctx.Done():
-					return
-				case data, ok := <-buffer:
-					if !ok || data == nil {
-						exhaustedBuffers[senderUid] = struct{}{}
-						continue
-					}
-					allExhausted = false // Loop again if you were able to get any data from the buffer
-					_, err := writeCloser.Write(data)
-					if err != nil {
-						return
-					}
-				}
-			}
-			if allExhausted {
-				break
-			}
-		}
-	}
-
 	cmd, _ := t.cmdMap[task.GetUid()]
 
 	args.outputChan <- &taskStartedPacket{uid: task.GetUid()}
 	if task.ReadStdin || task.GiveStdout {
 		if task.ReadStdin {
-			_, bufferExists := t.taskStdinBuffers[task.GetUid()]
-			if bufferExists {
-				// start routine to push contents from buffer into stdin of process
-			}
+			// Function to read data from a buffer and put it into stdin:
+			go t.stdinChannelConsumerFunc(task.GetUid(), args.context)
 		}
-		// check next task
-		// if task.ReadStdin: create buffer for each nextUid. Create routine to read from stdout and push it to each buffer
+		// Function to read data from stdout and put it into a buffer:
+		go t.stdoutConsumerFunc(task.GetUid(), args.context)
 		cmd.Start()
 	} else {
 		cmd.Run()
@@ -263,6 +178,103 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 
 	return nil
 }
+
+func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, ctx context.Context) {
+	// Func needs to properly duplicate output to all next nodes
+	reader, readerExists := t.stdoutReaders[sendingUid]
+	if !readerExists {
+		return
+	}
+
+	readCloser := (reader).(io.ReadCloser)
+	node, _ := t.resolver.GetNode(sendingUid)
+	task := node.(*Task)
+	nextUids := task.GetNext()
+
+	pushDataToChannel := func(data []byte, channel chan []byte, ctx context.Context) {
+		select {
+		case channel <- data:
+		case <-ctx.Done():
+			return
+		}
+	}
+
+	defer readCloser.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			buf := make([]byte, 4096)
+			n, err := readCloser.Read(buf)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return
+			}
+			for _, receivingUid := range nextUids {
+				if _, ok := t.taskStdinBuffers[receivingUid]; !ok {
+					t.taskStdinBuffers[receivingUid] = make(map[string]chan []byte)
+				}
+				if _, ok := t.taskStdinBuffers[receivingUid][sendingUid]; !ok {
+					t.taskStdinBuffers[receivingUid][sendingUid] = make(chan []byte)
+				}
+				channel, _ := t.taskStdinBuffers[receivingUid][sendingUid]
+
+				data := make([]byte, n)
+				if err == io.EOF {
+					data = nil
+				} else {
+					copy(data, buf[:n])
+				}
+				go pushDataToChannel(data, channel, ctx)
+			}
+
+		}
+	}
+}
+
+func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.Context) {
+	writer, writerExists := t.stdinWriters[receivingUid]
+	if !writerExists {
+		return
+	}
+	writeCloser := writer.(io.WriteCloser)
+	defer writeCloser.Close()
+
+	exhaustedBuffers := make(map[string]struct{})
+	for {
+		bufferSet, bufferSetExists := t.taskStdinBuffers[receivingUid]
+		if !bufferSetExists {
+			return
+		}
+		allExhausted := true // Assume no data in buffer
+		for senderUid, buffer := range bufferSet {
+			if _, ok := exhaustedBuffers[senderUid]; ok {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case data, ok := <-buffer:
+				if !ok || data == nil {
+					exhaustedBuffers[senderUid] = struct{}{}
+					continue
+				}
+				allExhausted = false // Loop again if you were able to get any data from the buffer
+				_, err := writeCloser.Write(data)
+				if err != nil {
+					return
+				}
+			}
+		}
+		if allExhausted {
+			break
+		}
+	}
+}
+
 func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 
 	incomingEdgeCounts := t.resolver.CountIncomingEdges()
