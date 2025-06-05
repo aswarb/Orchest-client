@@ -52,7 +52,7 @@ type TaskEngine struct {
 	cmdMap           map[string]*exec.Cmd
 	taskStdinBuffers map[string]map[string]chan []byte
 	stdoutReaders    map[string]io.Reader
-	stdinWriter      map[string]io.Writer
+	stdinWriters     map[string]io.Writer
 }
 type ParallelTaskArgs struct {
 	startUid   string
@@ -159,7 +159,7 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	args.currentUid = task.GetUid()
 
 	stdoutConsumerFunc := func(receivingUid string, sendingUid string, ctx context.Context) {
-		reader, readerExists := t.stdoutReaders[task.uid]
+		reader, readerExists := t.stdoutReaders[sendingUid]
 		if !readerExists {
 			return
 		}
@@ -195,7 +195,47 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	}
 
 	stdinChannelConsumerFunc := func(receivingUid string, ctx context.Context) {
+		writer, writerExists := t.stdinWriters[receivingUid]
+		if !writerExists {
+			return
+		}
 
+		writeCloser := writer.(io.WriteCloser)
+		defer writeCloser.Close()
+
+		exhaustedBuffers := make(map[string]struct{})
+		for {
+			bufferSet, bufferSetExists := t.taskStdinBuffers[receivingUid]
+			if !bufferSetExists {
+				return
+			}
+
+			allExhausted := true // Assume no data in buffer
+
+			for senderUid, buffer := range bufferSet {
+				if _, ok := exhaustedBuffers[senderUid]; ok {
+					continue
+				}
+
+				select {
+				case <-ctx.Done():
+					return
+				case data, ok := <-buffer:
+					if !ok || data == nil {
+						exhaustedBuffers[senderUid] = struct{}{}
+						continue
+					}
+					allExhausted = false // Loop again if you were able to get any data from the buffer
+					_, err := writeCloser.Write(data)
+					if err != nil {
+						return
+					}
+				}
+			}
+			if allExhausted {
+				break
+			}
+		}
 	}
 
 	cmd, _ := t.cmdMap[task.GetUid()]
