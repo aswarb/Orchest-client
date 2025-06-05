@@ -174,6 +174,15 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 				buf := make([]byte, 4096)
 				n, err := readCloser.Read(buf)
 				if err == io.EOF {
+
+					if _, ok := t.taskStdinBuffers[receivingUid]; !ok {
+						t.taskStdinBuffers[receivingUid] = make(map[string]chan []byte)
+					}
+					if _, ok := t.taskStdinBuffers[receivingUid][sendingUid]; !ok {
+						t.taskStdinBuffers[receivingUid][sendingUid] = make(chan []byte)
+					}
+					channel, _ := t.taskStdinBuffers[receivingUid][sendingUid]
+					channel <- nil
 					break
 				} else if err != nil {
 					return
@@ -199,7 +208,6 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 		if !writerExists {
 			return
 		}
-
 		writeCloser := writer.(io.WriteCloser)
 		defer writeCloser.Close()
 
@@ -209,14 +217,11 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 			if !bufferSetExists {
 				return
 			}
-
 			allExhausted := true // Assume no data in buffer
-
 			for senderUid, buffer := range bufferSet {
 				if _, ok := exhaustedBuffers[senderUid]; ok {
 					continue
 				}
-
 				select {
 				case <-ctx.Done():
 					return
