@@ -76,45 +76,11 @@ func (d *DAGResolver) RefreshTables() {
 	d.rebuildSegmentRevIndex()
 }
 
-func (d *DAGResolver) GetNodeLinearOrder() []Node {
-	incomingEdgeCounts := d.CountIncomingEdges()
-	zeroDegreeFilter := func(k string, v int) bool { return v == 0 }
-	zeroDegreeNodes := FilterMap(incomingEdgeCounts, zeroDegreeFilter)
-
-	// Kahn's Algorithm: https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
-	inEdgesCounts := make(map[string]int)
-	maps.Copy(inEdgesCounts, incomingEdgeCounts)
-	orderedNodes := []Node{}
-	for len(zeroDegreeNodes) > 0 {
-		var uid string
-		for k := range zeroDegreeNodes {
-			uid = k
-			break
-		}
-
-		delete(zeroDegreeNodes, uid)
-		node, exists := d.GetNode(uid)
-		if exists {
-			orderedNodes = append(orderedNodes, node)
-		}
-		for _, nextUid := range node.GetNext() {
-			_, exists := inEdgesCounts[nextUid]
-			if exists {
-				inEdgesCounts[nextUid]--
-			}
-			if inEdgesCounts[nextUid] <= 0 {
-				zeroDegreeNodes[nextUid] = 0
-			}
-		}
-	}
-	return orderedNodes
-}
-
 func (d *DAGResolver) getNodeMap() map[string]Node       { return d.nodeMap }
 func (d *DAGResolver) getSegmentMap() map[string]Segment { return d.segmentMap }
 
 func (d *DAGResolver) GetConvergencePoints() map[string]int {
-	incomingCounts := d.CountIncomingEdges()
+	incomingCounts := d.CountIncomingEdges(nil)
 	filterFunc := func(k string, v int) bool { return v > 1 }
 	return FilterMap(incomingCounts, filterFunc)
 }
@@ -129,11 +95,55 @@ func (d *DAGResolver) GetDivergencePoints() []Node {
 	return nodes
 }
 
-func (d *DAGResolver) CountIncomingEdges() map[string]int {
-	counts := make(map[string]int)
-	nodeMap := d.getNodeMap()
+func (d *DAGResolver) GetAllNodes(uids []string) []Node {
+	nodes := []Node{}
+	for _, uid := range uids {
+		if node, ok := d.GetNode(uid); ok {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
+}
+func (d *DAGResolver) GetDownstreamNodes(startNodes []Node) []Node {
+	exploredNodes := make(map[string]struct{})
+	downstreamNodes := []Node{}
 
-	for _, node := range nodeMap {
+	toExploreQueue := []Node{}
+	for _, node := range startNodes {
+		toExploreQueue = append(toExploreQueue, node)
+	}
+
+	for len(toExploreQueue) > 0 {
+		node := toExploreQueue[0]
+		downstreamNodes = append(downstreamNodes, node)
+		exploredNodes[node.GetUid()] = struct{}{}
+		toExploreQueue = toExploreQueue[:1]
+
+		for _, nextUid := range node.GetNext() {
+			nextNode, _ := d.GetNode(nextUid)
+			if _, ok := exploredNodes[nextUid]; ok {
+				toExploreQueue = append(toExploreQueue, nextNode)
+			}
+
+		}
+
+	}
+
+	return downstreamNodes
+}
+
+func (d *DAGResolver) CountIncomingEdges(nodes []Node) map[string]int {
+	counts := make(map[string]int)
+
+	if len(nodes) == 0 || nodes == nil {
+		allNodes := []Node{}
+		for _, v := range d.getNodeMap() {
+			allNodes = append(allNodes, v)
+		}
+		nodes = allNodes
+	}
+
+	for _, node := range nodes {
 		uid := node.GetUid()
 		_, uidInMap := counts[uid]
 		if uidInMap {
@@ -155,4 +165,60 @@ func (d *DAGResolver) GetSegments(nUid string) (map[string]struct{}, bool) {
 	segments, ok := d.segmentRevMap[nUid]
 
 	return segments, ok
+}
+
+func (d *DAGResolver) GetLinearOrderFromSegment(sUid string) []Node {
+	segment, _ := d.GetSegment(sUid)
+
+	orderedNodes := d.customKahnsAlgorithm(segment.GetMemberUids(), segment.GetEndpointUids())
+
+	return orderedNodes
+}
+
+func (d *DAGResolver) customKahnsAlgorithm(startUids []string, endUids []string) []Node {
+
+	startNodes := d.GetAllNodes(startUids)
+	allNodes := d.GetDownstreamNodes(startNodes)
+	incomingEdgeCounts := d.CountIncomingEdges(allNodes)
+
+	zeroDegreeFilter := func(k string, v int) bool { return v == 0 }
+	zeroDegreeNodes := FilterMap(incomingEdgeCounts, zeroDegreeFilter)
+
+	// Kahn's Algorithm: https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
+	inEdgesCounts := make(map[string]int)
+	maps.Copy(inEdgesCounts, incomingEdgeCounts)
+	orderedNodes := []Node{}
+	for len(zeroDegreeNodes) > 0 {
+		var uid string
+		for k := range zeroDegreeNodes {
+			uid = k
+			break
+		}
+
+		delete(zeroDegreeNodes, uid)
+		node, exists := d.GetNode(uid)
+		if exists {
+			orderedNodes = append(orderedNodes, node)
+		}
+		for _, nextUid := range node.GetNext() {
+			continueLoop := true
+			for _, endUid := range endUids {
+				if endUid == nextUid {
+					continueLoop = false
+					break
+				}
+			}
+			if !continueLoop {
+				break
+			}
+			_, exists := inEdgesCounts[nextUid]
+			if exists {
+				inEdgesCounts[nextUid]--
+			}
+			if inEdgesCounts[nextUid] <= 0 {
+				zeroDegreeNodes[nextUid] = 0
+			}
+		}
+	}
+	return orderedNodes
 }
