@@ -175,6 +175,26 @@ func (d *DAGResolver) GetLinearOrderFromSegment(sUid string) []Node {
 	return orderedNodes
 }
 
+func (d *DAGResolver) GetLinearOrder() []Node {
+
+	counts := d.CountIncomingEdges(nil)
+	startUids := []string{}
+	endUids := []string{}
+
+	for k, v := range counts {
+		if v == 0 {
+			startUids = append(startUids, k)
+		}
+		if node, ok := d.GetNode(k); ok && len(node.GetNext()) == 0 {
+			endUids = append(endUids, k)
+		}
+	}
+
+	orderedNodes := d.customKahnsAlgorithm(startUids, endUids)
+
+	return orderedNodes
+}
+
 func (d *DAGResolver) customKahnsAlgorithm(startUids []string, endUids []string) []Node {
 
 	startNodes := d.GetAllNodes(startUids)
