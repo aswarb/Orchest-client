@@ -99,6 +99,13 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		}
 	}
 
+	pushDataToChannel := func(data []byte, channel chan []byte, ctx context.Context) {
+		select {
+		case channel <- data:
+		case <-ctx.Done():
+			return
+		}
+	}
 	handleRequestRoutine := func() {
 		for {
 			select {
@@ -129,7 +136,15 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					data := bufferPacket.getData()
 					sender := bufferPacket.getSender()
 					receiver := bufferPacket.getTarget()
-					t.taskStdinBuffers[receiver][sender] <- data
+
+					if _, ok := t.taskStdinBuffers[receiver]; !ok {
+						t.taskStdinBuffers[receiver] = make(map[string]chan []byte)
+					}
+					if _, ok := t.taskStdinBuffers[receiver][sender]; !ok {
+						t.taskStdinBuffers[receiver][sender] = make(chan []byte)
+					}
+					channel, _ := t.taskStdinBuffers[receiver][sender]
+					go pushDataToChannel(data, channel, ctx)
 				}
 			}
 		}
@@ -174,7 +189,7 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 			go t.stdinChannelConsumerFunc(task.GetUid(), args.context)
 		}
 		// Function to read data from stdout and put it into a buffer:
-		go t.stdoutConsumerFunc(task.GetUid(), args.context)
+		go t.stdoutConsumerFunc(task.GetUid(), args.outputChan, args.context)
 		cmd.Start()
 	} else {
 		cmd.Run()
@@ -184,7 +199,8 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	return nil
 }
 
-func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, ctx context.Context) {
+// Designed to run as a routine
+func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packet, ctx context.Context) {
 	// Func needs to properly duplicate output to all next nodes
 	reader, readerExists := t.stdoutReaders[sendingUid]
 	if !readerExists {
@@ -195,14 +211,6 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, ctx context.Context) 
 	node, _ := t.resolver.GetNode(sendingUid)
 	task := node.(*Task)
 	nextUids := task.GetNext()
-
-	pushDataToChannel := func(data []byte, channel chan []byte, ctx context.Context) {
-		select {
-		case channel <- data:
-		case <-ctx.Done():
-			return
-		}
-	}
 
 	defer readCloser.Close()
 	for {
@@ -219,21 +227,14 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, ctx context.Context) 
 				return
 			}
 			for _, receivingUid := range nextUids {
-				if _, ok := t.taskStdinBuffers[receivingUid]; !ok {
-					t.taskStdinBuffers[receivingUid] = make(map[string]chan []byte)
-				}
-				if _, ok := t.taskStdinBuffers[receivingUid][sendingUid]; !ok {
-					t.taskStdinBuffers[receivingUid][sendingUid] = make(chan []byte)
-				}
-				channel, _ := t.taskStdinBuffers[receivingUid][sendingUid]
-
 				data := make([]byte, n)
 				if err == io.EOF {
 					data = nil
 				} else {
 					copy(data, buf[:n])
 				}
-				go pushDataToChannel(data, channel, ctx)
+				bufferPacket := &bufferDataPacket{thisUid: receivingUid, targetUid: sendingUid, data: data}
+				outputChan <- bufferPacket
 			}
 
 		}
@@ -282,7 +283,7 @@ func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.C
 
 func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 
-	incomingEdgeCounts := t.resolver.CountIncomingEdges()
+	incomingEdgeCounts := t.resolver.CountIncomingEdges(nil)
 	filterFunc := func(k string, v int) bool { return v > 1 }
 	conergencePoints := FilterMap(incomingEdgeCounts, filterFunc)
 	args := wt.Args.(*ParallelTaskArgs)
