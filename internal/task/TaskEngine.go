@@ -50,7 +50,7 @@ func (p *bufferDataPacket) getData() []byte   { return p.data }
 type TaskEngine struct {
 	resolver         *DAGResolver
 	cmdMap           map[string]*exec.Cmd
-	taskStdinBuffers map[string]map[string]chan []byte
+	taskStdinBuffers map[string]map[string]chan []byte // {receier_uid: {sender_uid: chan []byte}}
 	stdoutReaders    map[string]io.Reader
 	stdinWriters     map[string]io.Writer
 }
@@ -67,6 +67,7 @@ func (p ParallelTaskArgs) IsTask() bool { return true }
 
 // Creates pipes for adjacent nodes
 func (t *TaskEngine) createPipes() {
+
 }
 
 func (t *TaskEngine) ExecuteTasksInOrder() {
@@ -91,7 +92,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	outputChannel := make(chan packet)
 	signalChannel := make(chan struct{})
 
-	incomingCounts := t.resolver.CountIncomingEdges()
+	incomingCounts := t.resolver.CountIncomingEdges(nil)
 	for k, v := range incomingCounts {
 		if v < 2 {
 			delete(incomingCounts, k)
@@ -124,7 +125,11 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 						replyChannel <- false
 					}
 				case *bufferDataPacket:
-					// Do something ...
+					bufferPacket := output.(*bufferDataPacket)
+					data := bufferPacket.getData()
+					sender := bufferPacket.getSender()
+					receiver := bufferPacket.getTarget()
+					t.taskStdinBuffers[receiver][sender] <- data
 				}
 			}
 		}
