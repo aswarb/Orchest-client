@@ -21,6 +21,7 @@ type Segment interface {
 
 type DAGResolver struct {
 	nodeMap       map[string]Node                //node.Uid -> Node
+	revIndex      map[string][]Node              //node.Uid -> incoming Node
 	segmentMap    map[string]Segment             //segment.Uid -> Segment
 	segmentRevMap map[string]map[string]struct{} //Node.Uid -> set(segment.Uid)
 }
@@ -72,8 +73,25 @@ func (d *DAGResolver) rebuildSegmentRevIndex() {
 
 }
 
+func (d *DAGResolver) rebuildRevIndex() {
+	revIndex := make(map[string][]Node)
+
+	for _, node := range d.nodeMap {
+		nextUids := node.GetNext()
+		for _, nextUid := range nextUids {
+			if _, ok := revIndex[nextUid]; !ok {
+				revIndex[nextUid] = []Node{}
+			}
+			revIndex[nextUid] = append(revIndex[nextUid], node)
+		}
+	}
+
+	d.revIndex = revIndex
+}
+
 func (d *DAGResolver) RefreshTables() {
 	d.rebuildSegmentRevIndex()
+	d.rebuildRevIndex()
 }
 
 func (d *DAGResolver) getNodeMap() map[string]Node       { return d.nodeMap }
@@ -176,7 +194,6 @@ func (d *DAGResolver) GetLinearOrderFromSegment(sUid string) []Node {
 }
 
 func (d *DAGResolver) GetLinearOrder() []Node {
-
 	counts := d.CountIncomingEdges(nil)
 	startUids := []string{}
 	endUids := []string{}
