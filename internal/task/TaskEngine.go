@@ -47,13 +47,6 @@ func (p *bufferDataPacket) getSender() string { return p.thisUid }
 func (p *bufferDataPacket) getTarget() string { return p.targetUid }
 func (p *bufferDataPacket) getData() []byte   { return p.data }
 
-type TaskEngine struct {
-	resolver         *DAGResolver
-	cmdMap           map[string]*exec.Cmd
-	taskStdinBuffers map[string]map[string]chan []byte // {receier_uid: {sender_uid: chan []byte}}
-	stdoutReaders    map[string]io.Reader
-	stdinWriters     map[string]io.Writer
-}
 type ParallelTaskArgs struct {
 	startUid   string
 	currentUid string
@@ -65,9 +58,94 @@ type ParallelTaskArgs struct {
 
 func (p ParallelTaskArgs) IsTask() bool { return true }
 
+type TaskEngine struct {
+	resolver         *DAGResolver
+	cmdMap           map[string]*exec.Cmd
+	taskStdinBuffers map[string]map[string]chan []byte // {receier_uid: {sender_uid: chan []byte}}
+	stdoutReaders    map[string]io.Reader
+	stdinWriters     map[string]io.Writer
+}
+
+func (t *TaskEngine) createIncomingPipes(target *Task) {
+	readers := []io.Reader{}
+	incomingNodes, hasIncomingNodes := t.resolver.GetIncomingNodes(target.GetUid())
+	cmd, _ := t.cmdMap[target.GetUid()]
+	if hasIncomingNodes && len(incomingNodes) > 1 {
+		for _, prevNode := range incomingNodes {
+			prevTask := prevNode.(*Task)
+			if !prevTask.GiveStdout {
+				continue
+			}
+			prevCmd, _ := t.cmdMap[prevNode.GetUid()]
+			pipeRead, pipeWrite := io.Pipe()
+			prevCmd.Stdout = pipeWrite
+			readers = append(readers, pipeRead)
+		}
+
+	} else if hasIncomingNodes && len(incomingNodes) == 1 {
+		prevTask := incomingNodes[0].(*Task)
+		if prevTask.GiveStdout && target.ReadStdin {
+			prevCmd, _ := t.cmdMap[incomingNodes[0].GetUid()]
+			pipeRead, pipeWrite := io.Pipe()
+			prevCmd.Stdout = pipeWrite
+			cmd.Stdin = pipeRead
+		}
+		return
+	}
+
+	if target.ReadStdin && len(readers) > 0 {
+		multiReader := io.MultiReader(readers...)
+		cmd.Stdin = multiReader
+	}
+}
+func (t *TaskEngine) createOutgoingPipes(target *Task) {
+	writers := []io.Writer{}
+	nextNodes := []Node{}
+	nextUids := target.GetNext()
+	for _, uid := range nextUids {
+		if node, exists := t.resolver.GetNode(uid); exists {
+			nextNodes = append(nextNodes, node)
+		}
+	}
+	cmd, _ := t.cmdMap[target.GetUid()]
+	if len(nextNodes) > 1 {
+		for _, nextNode := range nextNodes {
+			nextTask := nextNode.(*Task)
+			if !nextTask.ReadStdin {
+				continue
+			}
+			nextCmd, _ := t.cmdMap[nextNode.GetUid()]
+			pipeRead, pipeWrite := io.Pipe()
+			nextCmd.Stdin = pipeRead
+			writers = append(writers, pipeWrite)
+		}
+
+	} else if len(nextNodes) == 1 {
+		nextTask := nextNodes[0].(*Task)
+		if nextTask.ReadStdin && target.GiveStdout {
+			nextCmd, _ := t.cmdMap[nextNodes[0].GetUid()]
+			pipeRead, pipeWrite := io.Pipe()
+			nextCmd.Stdin = pipeRead
+			cmd.Stdout = pipeWrite
+		}
+		return
+	}
+
+	if target.GiveStdout && len(writers) > 0 {
+		multiWriter := io.MultiWriter(writers...)
+		cmd.Stdout = multiWriter
+	}
+}
+
 // Creates pipes for adjacent nodes
 func (t *TaskEngine) createPipes() {
+	allTasks := t.resolver.GetLinearOrder()
 
+	for _, node := range allTasks {
+		task := node.(*Task)
+		t.createIncomingPipes(task)
+		t.createOutgoingPipes(task)
+	}
 }
 
 func (t *TaskEngine) ExecuteTasksInOrder() {
@@ -87,17 +165,21 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	incomingCounts := t.resolver.CountIncomingEdges(nil)
 	branchCount := 0
 
+	for _, count := range incomingCounts {
+		if count == 0 {
+			branchCount++
+		}
+	}
+
 	for _, t := range linearOrderedTasks {
 		uid := t.GetUid()
 		if count, ok := incomingCounts[uid]; ok && count > 1 {
 			branchCount -= count - 1
 		}
 
-		next := t.GetNext()
-		if len(next) > 1 {
+		if next := t.GetNext(); len(next) > 1 {
 			branchCount += len(next) - 1
 		}
-
 	}
 
 	workerpool := wp.MakeWorkerPool(ctx)
