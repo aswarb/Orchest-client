@@ -97,6 +97,12 @@ func (d *DAGResolver) RefreshTables() {
 func (d *DAGResolver) getNodeMap() map[string]Node       { return d.nodeMap }
 func (d *DAGResolver) getSegmentMap() map[string]Segment { return d.segmentMap }
 
+func (d *DAGResolver) GetIncomingNodes(uid string) ([]Node, bool) {
+	nodes, ok := d.revIndex[uid]
+
+	return nodes, ok
+}
+
 func (d *DAGResolver) GetConvergencePoints() map[string]int {
 	incomingCounts := d.CountIncomingEdges(nil)
 	filterFunc := func(k string, v int) bool { return v > 1 }
