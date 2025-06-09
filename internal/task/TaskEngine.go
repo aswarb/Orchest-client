@@ -82,17 +82,32 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	segment, _ := t.resolver.GetSegment(segmentUid)
-	someTarget := 10 // Needs to be gotten from segment task count
+	linearOrderedTasks := t.resolver.GetLinearOrderFromSegment(segmentUid)
+
+	incomingCounts := t.resolver.CountIncomingEdges(nil)
+	branchCount := 0
+
+	for _, t := range linearOrderedTasks {
+		uid := t.GetUid()
+		if count, ok := incomingCounts[uid]; ok && count > 1 {
+			branchCount -= count - 1
+		}
+
+		next := t.GetNext()
+		if len(next) > 1 {
+			branchCount += len(next) - 1
+		}
+
+	}
 
 	workerpool := wp.MakeWorkerPool(ctx)
-	workerpool.AddWorkers(uint(1))
+	workerpool.AddWorkers(uint(branchCount))
 	startedTasks := make(map[string]struct{})
 	finishedTasks := make(map[string]struct{})
 
 	outputChannel := make(chan packet)
 	signalChannel := make(chan struct{})
 
-	incomingCounts := t.resolver.CountIncomingEdges(nil)
 	for k, v := range incomingCounts {
 		if v < 2 {
 			delete(incomingCounts, k)
@@ -119,7 +134,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 				case *taskCompletePacket:
 					uid := p.getSender()
 					finishedTasks[uid] = struct{}{}
-					if len(finishedTasks) == someTarget {
+					if len(finishedTasks) == len(linearOrderedTasks) {
 						signalChannel <- struct{}{}
 					}
 				case *proceedRequestPacket:
