@@ -94,7 +94,7 @@ func (d *DAGResolver) RefreshTables() {
 	d.rebuildRevIndex()
 }
 
-func (d *DAGResolver) getNodeMap() map[string]Node       { return d.nodeMap }
+func (d *DAGResolver) GetNodeMap() map[string]Node       { return d.nodeMap }
 func (d *DAGResolver) getSegmentMap() map[string]Segment { return d.segmentMap }
 
 func (d *DAGResolver) GetIncomingNodes(uid string) ([]Node, bool) {
@@ -111,7 +111,7 @@ func (d *DAGResolver) GetConvergencePoints() map[string]int {
 
 func (d *DAGResolver) GetDivergencePoints() []Node {
 	nodes := []Node{}
-	for _, v := range d.getNodeMap() {
+	for _, v := range d.GetNodeMap() {
 		if len(v.GetNext()) > 1 {
 			nodes = append(nodes, v)
 		}
@@ -161,7 +161,7 @@ func (d *DAGResolver) CountIncomingEdges(nodes []Node) map[string]int {
 
 	if len(nodes) == 0 || nodes == nil {
 		allNodes := []Node{}
-		for _, v := range d.getNodeMap() {
+		for _, v := range d.GetNodeMap() {
 			allNodes = append(allNodes, v)
 		}
 		nodes = allNodes
