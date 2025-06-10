@@ -6,8 +6,8 @@ import (
 )
 
 type MultiWriteCloser struct {
-	writers     []io.WriteCloser
-	multiWriter io.Writer
+	writers []io.WriteCloser
+	io.Writer
 }
 
 func (m *MultiWriteCloser) Close() error {
@@ -22,4 +22,19 @@ func (m *MultiWriteCloser) Close() error {
 		return nil
 	}
 	return errors.Join(errs...)
+}
+
+func MakeMultiWriteCloser(writeClosers ...io.WriteCloser) *MultiWriteCloser {
+	writers := []io.Writer{}
+	for _, wc := range writeClosers {
+		writers = append(writers, wc)
+	}
+
+	mw := io.MultiWriter(writers...)
+	mwc := MultiWriteCloser{
+		writers: writeClosers,
+		Writer:  mw,
+	}
+
+	return &mwc
 }
