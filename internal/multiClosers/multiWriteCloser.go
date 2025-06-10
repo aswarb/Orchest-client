@@ -1,4 +1,4 @@
-package task
+package multiClosers
 
 import (
 	"errors"
