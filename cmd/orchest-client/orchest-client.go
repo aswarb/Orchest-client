@@ -194,12 +194,12 @@ func main() {
 	wd, _ := os.Getwd()
 	tomlPath := fmt.Sprintf("%s%s", wd, "/internal/task/TEMPLATE.orchest.task.toml")
 	fmt.Println(tomlPath)
-	tasks := task.GetTomlTaskArray(tomlPath)
+	tasks, segments := task.GetTomlTaskArray(tomlPath)
 	for _, task := range tasks {
 		fmt.Println(task)
 	}
-	taskManager := task.GetTaskManagerFromToml(tasks)
-	taskManager.ExecuteTaskProcess()
+	taskManager := task.GetTaskManagerFromToml(tasks, segments)
+	taskManager.StartTask(ctx)
 
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")
