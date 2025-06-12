@@ -59,6 +59,18 @@ type ParallelTaskArgs struct {
 
 func (p ParallelTaskArgs) IsTask() bool { return true }
 
+func GetTaskEngine(resolver *DAGResolver) *TaskEngine {
+	engine := TaskEngine{
+		resolver:          resolver,
+		cmdMap:            make(map[string]*exec.Cmd),
+		taskStdinBuffers:  make(map[string]map[string]chan []byte),
+		procStdinReaders:  make(map[string]io.ReadCloser),
+		procStdoutWriters: make(map[string]io.WriteCloser),
+	}
+
+	return &engine
+}
+
 type TaskEngine struct {
 	resolver          *DAGResolver
 	cmdMap            map[string]*exec.Cmd
