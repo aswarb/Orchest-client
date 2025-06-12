@@ -1,6 +1,5 @@
 [[Parallel]]
 uid = "p1"
 name = ""
-members = []
-givestdout = false
-readstdin = false
+startMembers = []
+endMembers = []

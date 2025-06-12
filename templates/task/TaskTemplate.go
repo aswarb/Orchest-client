@@ -11,8 +11,8 @@ var TaskTemplate embed.FS
 type TaskType string
 
 const (
-	SINGLE_TASK   TaskType = "Single"
-	PARALLEL_TASK TaskType = "Parallel"
+	SINGLE_TASK      TaskType = "Single"
+	PARALLEL_SEGMENT TaskType = "Parallel"
 )
 
 func GetTemplate(t TaskType) ([]byte, error) {
@@ -20,7 +20,7 @@ func GetTemplate(t TaskType) ([]byte, error) {
 	switch t {
 	case SINGLE_TASK:
 		file = "SINGLE_TASK_TEMPLATE.orchest.task.toml"
-	case PARALLEL_TASK:
+	case PARALLEL_SEGMENT:
 		file = "PARALLEL_TASK_TEMPLATE.orchest.task.toml"
 	default:
 		file = ""
