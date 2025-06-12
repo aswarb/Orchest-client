@@ -37,12 +37,18 @@ type ParallelSegment struct {
 	endUids   []string
 }
 
-func (t *Task) AddMemberUid(uid string) {
-	t.next = append(t.next, uid)
+func (s *ParallelSegment) AddStartUid(uid string) {
+	s.startUids = append(s.startUids, uid)
 }
 
-func (t *Task) SetMemberUids(uids []string) {
-	t.next = uids
+func (s *ParallelSegment) AddEndUid(uid string) {
+	s.endUids = append(s.endUids, uid)
+}
+func (s *ParallelSegment) SetStartUids(uids []string) {
+	s.startUids = uids
+}
+func (s *ParallelSegment) SetEndUids(uids []string) {
+	s.endUids = uids
 }
 
 func (p *ParallelSegment) GetUid() string            { return p.uid }
