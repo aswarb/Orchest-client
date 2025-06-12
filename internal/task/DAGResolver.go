@@ -19,6 +19,24 @@ type Segment interface {
 	SetMemberUids([]string)
 }
 
+func MakeDAGResolver(nodes []Node, segments []Segment) *DAGResolver {
+	resolver := DAGResolver{
+		nodeMap:       make(map[string]Node),
+		revIndex:      make(map[string][]Node),
+		segmentMap:    make(map[string]Segment),
+		segmentRevMap: make(map[string]map[string]struct{}),
+	}
+	for _, node := range nodes {
+		resolver.AddNode(node)
+	}
+	for _, segment := range segments {
+		resolver.AddSegment(segment)
+	}
+	resolver.RefreshTables()
+
+	return &resolver
+}
+
 type DAGResolver struct {
 	nodeMap       map[string]Node                //node.Uid -> Node
 	revIndex      map[string][]Node              //node.Uid -> incoming Node
