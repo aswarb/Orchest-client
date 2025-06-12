@@ -1,6 +1,8 @@
 package task
 
-import ()
+import (
+	"context"
+)
 
 func FilterMap[K comparable, V any](m map[K]V, isValid func(K, V) bool) map[K]V {
 	result := make(map[K]V)
@@ -23,6 +25,49 @@ type TaskManager struct {
 	resolver *DAGResolver
 }
 
-func (t *TaskManager) startTask() {
-	//
+func (t *TaskManager) startTask(ctx context.Context) {
+	t.engine.ExecuteTasksInOrder(ctx)
+}
+
+func GetTaskManagerFromToml(sourceTasks []TomlTask, sourceSegments []TomlSegment) *TaskManager {
+	tasks := []Node{}
+	segments := []Segment{}
+	for _, target := range sourceTasks {
+		switch target.(type) {
+		case *SingleTomlTask:
+			t := target.(*SingleTomlTask)
+			task := GetTask(t.Uid,
+				t.Name,
+				t.Command,
+				t.Args,
+				uint64(t.Timeout),
+				uint64(t.Delay),
+				t.Next,
+				t.GiveStdout,
+				t.ReadStdin)
+			tasks = append(tasks, task)
+		default:
+			continue
+		}
+	}
+
+	for _, target := range sourceSegments {
+		switch target.(type) {
+		case *ParallelTomlSegment:
+			s := target.(*ParallelTomlSegment)
+			segment := GetParallelSegment(s.Uid,
+				s.Name,
+				s.StartUids,
+				s.endUids)
+			segments = append(segments, segment)
+		default:
+			continue
+		}
+	}
+
+	resolver := MakeDAGResolver(tasks, segments)
+	engine := GetTaskEngine(resolver)
+	manager := TaskManager{engine: engine, resolver: resolver}
+
+	return &manager
 }
