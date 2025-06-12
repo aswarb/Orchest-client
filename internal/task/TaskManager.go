@@ -25,7 +25,7 @@ type TaskManager struct {
 	resolver *DAGResolver
 }
 
-func (t *TaskManager) startTask(ctx context.Context) {
+func (t *TaskManager) StartTask(ctx context.Context) {
 	t.engine.ExecuteTasksInOrder(ctx)
 }
 
