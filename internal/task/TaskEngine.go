@@ -67,98 +67,80 @@ type TaskEngine struct {
 	procStdoutWriters map[string]io.WriteCloser         //sender: io.WriteCloser
 }
 
-func (t *TaskEngine) createIncomingPipes(target *Task) {
-	readers := []io.ReadCloser{}
-	incomingNodes, hasIncomingNodes := t.resolver.GetIncomingNodes(target.GetUid())
-	cmd, _ := t.cmdMap[target.GetUid()]
-	if hasIncomingNodes && len(incomingNodes) > 1 {
-		for _, prevNode := range incomingNodes {
-			prevTask := prevNode.(*Task)
-			if !prevTask.GiveStdout {
-				continue
-			}
-			prevCmd, _ := t.cmdMap[prevNode.GetUid()]
-			pipeRead, pipeWrite := io.Pipe()
-			prevCmd.Stdout = pipeWrite
-			t.procStdoutWriters[prevTask.GetUid()] = pipeWrite
-			readers = append(readers, pipeRead)
-		}
-
-	} else if hasIncomingNodes && len(incomingNodes) == 1 {
-		prevTask := incomingNodes[0].(*Task)
-		if prevTask.GiveStdout && target.ReadStdin {
-			prevCmd, _ := t.cmdMap[incomingNodes[0].GetUid()]
-			pipeRead, pipeWrite := io.Pipe()
-			prevCmd.Stdout = pipeWrite
-			t.procStdoutWriters[prevTask.GetUid()] = pipeWrite
-			t.procStdinReaders[target.GetUid()] = pipeRead
-
-			cmd.Stdin = pipeRead
-		}
-		return
-	}
-
-	if target.ReadStdin && len(readers) > 0 {
-		multiReadCloser := mc.MakeMultiReadCloser(readers...)
-		cmd.Stdin = multiReadCloser
-		t.procStdinReaders[target.GetUid()] = multiReadCloser
-	}
-}
-func (t *TaskEngine) createOutgoingPipes(target *Task) {
-	writers := []io.WriteCloser{}
-	nextNodes := []Node{}
-	nextUids := target.GetNext()
-	for _, uid := range nextUids {
-		if node, exists := t.resolver.GetNode(uid); exists {
-			nextNodes = append(nextNodes, node)
-		}
-	}
-	cmd, _ := t.cmdMap[target.GetUid()]
-	if len(nextNodes) > 1 {
-		for _, nextNode := range nextNodes {
-			nextTask := nextNode.(*Task)
-			if !nextTask.ReadStdin {
-				continue
-			}
-			nextCmd, _ := t.cmdMap[nextNode.GetUid()]
-			pipeRead, pipeWrite := io.Pipe()
-			nextCmd.Stdin = pipeRead
-			t.procStdinReaders[nextNode.GetUid()] = pipeRead
-			writers = append(writers, pipeWrite)
-		}
-
-	} else if len(nextNodes) == 1 {
-		nextTask := nextNodes[0].(*Task)
-		if nextTask.ReadStdin && target.GiveStdout {
-			nextCmd, _ := t.cmdMap[nextNodes[0].GetUid()]
-			pipeRead, pipeWrite := io.Pipe()
-			nextCmd.Stdin = pipeRead
-			cmd.Stdout = pipeWrite
-			t.procStdoutWriters[target.GetUid()] = pipeWrite
-			t.procStdinReaders[nextTask.GetUid()] = pipeRead
-		}
-		return
-	}
-
-	if target.GiveStdout && len(writers) > 0 {
-		multiWriteCloser := mc.MakeMultiWriteCloser(writers...)
-		cmd.Stdout = multiWriteCloser
-		t.procStdoutWriters[target.GetUid()] = multiWriteCloser
-	}
-}
-
 // Creates pipes for adjacent nodes
 func (t *TaskEngine) createPipes() {
-	allTasks := t.resolver.GetLinearOrder()
 
-	for _, node := range allTasks {
-		task := node.(*Task)
-		t.createIncomingPipes(task)
-		t.createOutgoingPipes(task)
+	stdinEndpoints := make(map[string][]io.ReadCloser)
+	stdoutEndpoints := make(map[string][]io.WriteCloser)
+
+	allNodes := t.resolver.GetLinearOrder()
+
+	for _, node := range allNodes {
+		sendingTask, ok := node.(*Task)
+		if !ok {
+			continue
+		}
+		sendingUid := sendingTask.GetUid()
+
+		if _, arrExists := stdinEndpoints[sendingUid]; !arrExists {
+			stdinEndpoints[sendingUid] = []io.ReadCloser{}
+		}
+
+		nextUids := sendingTask.GetNext()
+		for _, uid := range nextUids {
+			receivingNode, nodeExists := t.resolver.GetNode(uid)
+			if !nodeExists {
+				continue
+			}
+			receivingTask, ok := receivingNode.(*Task)
+			if !ok {
+				continue
+			}
+			receivingUid := receivingTask.GetUid()
+
+			if _, arrExists := stdinEndpoints[sendingUid]; !arrExists {
+				stdoutEndpoints[receivingUid] = []io.WriteCloser{}
+			}
+
+			pipeReader, pipeWriter := io.Pipe()
+			stdinEndpoints[receivingUid] = append(stdinEndpoints[receivingUid], pipeReader)
+			stdoutEndpoints[sendingUid] = append(stdoutEndpoints[sendingUid], pipeWriter)
+		}
+	}
+
+	for _, node := range allNodes {
+		task, ok := node.(*Task)
+		if !ok {
+			continue
+		}
+		sendingUid := task.GetUid()
+
+		cmd, cmdExists := t.cmdMap[sendingUid]
+
+		if !cmdExists {
+			continue
+		}
+
+		if stdinReaders, arrExists := stdinEndpoints[sendingUid]; arrExists {
+			if len(stdinReaders) > 1 {
+				mr := mc.MakeMultiReadCloser(stdinReaders...)
+				cmd.Stdin = mr
+			} else if len(stdinReaders) == 1 {
+				cmd.Stdin = stdinReaders[0]
+			}
+		}
+		if stdoutWriters, arrExists := stdoutEndpoints[sendingUid]; arrExists {
+			if len(stdoutWriters) > 1 {
+				mw := mc.MakeMultiWriteCloser(stdoutWriters...)
+				cmd.Stdout = mw
+			} else if len(stdoutWriters) == 1 {
+				cmd.Stdout = stdoutWriters[0]
+			}
+		}
 	}
 }
 
-//TODO Needs finishing
+// TODO Needs finishing
 func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 	t.createPipes()
 	orderedNodes := t.resolver.GetLinearOrder()
