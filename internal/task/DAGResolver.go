@@ -15,8 +15,10 @@ type Segment interface {
 	GetUid() string
 	GetMemberUids() []string
 	GetEndpointUids() []string
-	AddMemberUid(string)
-	SetMemberUids([]string)
+	AddStartUid(string)
+	AddEndUid(string)
+	SetStartUids([]string)
+	SetEndUids([]string)
 }
 
 func MakeDAGResolver(nodes []Node, segments []Segment) *DAGResolver {
