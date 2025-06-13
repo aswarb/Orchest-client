@@ -220,7 +220,6 @@ func (d *DAGResolver) GetLinearOrder() []Node {
 			endUids = append(endUids, k)
 		}
 	}
-
 	orderedNodes := d.customKahnsAlgorithm(startUids, endUids)
 
 	return orderedNodes

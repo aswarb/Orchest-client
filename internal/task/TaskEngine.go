@@ -85,7 +85,6 @@ func (t *TaskEngine) populateCmdMap() {
 		if !taskIsValid {
 			continue
 		}
-		//fmt.Println(task.GetUid(),task.Args)
 		cmd := exec.Command(task.Executable, task.Args...)
 
 		t.cmdMap[task.GetUid()] = cmd
@@ -100,7 +99,6 @@ func (t *TaskEngine) createPipes() {
 	stdoutEndpoints := make(map[string][]io.WriteCloser)
 
 	allNodes := t.resolver.GetLinearOrder()
-
 	for _, node := range allNodes {
 		sendingTask, ok := node.(*Task)
 		if !ok {
