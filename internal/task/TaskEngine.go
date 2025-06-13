@@ -129,8 +129,12 @@ func (t *TaskEngine) createPipes() {
 			}
 
 			pipeReader, pipeWriter := io.Pipe()
-			stdinEndpoints[receivingUid] = append(stdinEndpoints[receivingUid], pipeReader)
-			stdoutEndpoints[sendingUid] = append(stdoutEndpoints[sendingUid], pipeWriter)
+			if receivingTask.ReadStdin {
+				stdinEndpoints[receivingUid] = append(stdinEndpoints[receivingUid], pipeReader)
+			}
+			if sendingTask.GiveStdout {
+				stdoutEndpoints[sendingUid] = append(stdoutEndpoints[sendingUid], pipeWriter)
+			}
 		}
 	}
 
