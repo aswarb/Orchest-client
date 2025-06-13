@@ -168,8 +168,8 @@ func (t *TaskEngine) createPipes() {
 	}
 }
 
-// TODO Needs finishing
 func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
+	t.populateCmdMap()
 	t.createPipes()
 	orderedNodes := t.resolver.GetLinearOrder()
 	for _, node := range orderedNodes {
