@@ -79,6 +79,20 @@ type TaskEngine struct {
 	procStdoutWriters map[string]io.WriteCloser         //sender: io.WriteCloser
 }
 
+func (t *TaskEngine) populateCmdMap() {
+	for _, node := range t.resolver.GetNodeMap() {
+		task, taskIsValid := node.(*Task)
+		if !taskIsValid {
+			continue
+		}
+		//fmt.Println(task.GetUid(),task.Args)
+		cmd := exec.Command(task.Executable, task.Args...)
+
+		t.cmdMap[task.GetUid()] = cmd
+	}
+
+}
+
 // Creates pipes for adjacent nodes
 func (t *TaskEngine) createPipes() {
 
