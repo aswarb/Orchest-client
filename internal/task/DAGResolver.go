@@ -183,20 +183,11 @@ func (d *DAGResolver) CountIncomingEdges(nodes []Node) map[string]int {
 		}
 		nodes = allNodes
 	}
-
 	for _, node := range nodes {
-		uid := node.GetUid()
-		_, uidInMap := counts[uid]
-		if uidInMap {
-			counts[uid] = 0
-		}
-		for _, nextUid := range node.GetNext() {
-			_, nextUidInMap := counts[nextUid]
-			if nextUidInMap {
-				counts[nextUid]++
-			} else {
-				counts[nextUid] = 1
-			}
+		if nodes, hasIncoming := d.GetIncomingNodes(node.GetUid()); hasIncoming {
+			counts[node.GetUid()] = len(nodes)
+		} else {
+			counts[node.GetUid()] = 0
 		}
 	}
 	return counts
