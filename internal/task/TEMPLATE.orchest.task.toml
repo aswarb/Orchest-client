@@ -6,7 +6,7 @@ args = ["\"this is task 1\""]
 timeout = 3000
 delay = 200
 next = ["t002"]
-givestdout = true
+givestdout = false
 readstdin = false
 
 [[Task]]
@@ -17,7 +17,7 @@ args = ["\"this is task 3\""]
 timeout = 3000
 delay = 200
 next = ["t002"]
-givestdout = true
+givestdout = false
 readstdin = false
 
 
@@ -29,7 +29,7 @@ args = ["\"this is task 2\""]
 timeout = 3000
 delay = 200
 next = ["t004"]
-givestdout = true
+givestdout = false
 readstdin = false
 
 
@@ -41,7 +41,7 @@ args = ["\"this is task 4\""]
 timeout = 3000
 delay = 200
 next = ["t005", "t006"]
-givestdout = true
+givestdout = false
 readstdin = false
 
 [[Task]]
@@ -52,7 +52,7 @@ args = ["\"this is task 5\""]
 timeout = 3000
 delay = 200
 next = ["t007"]
-givestdout = true
+givestdout = false
 readstdin = false
 
 [[Task]]
@@ -63,7 +63,7 @@ args = ["\"this is task 6\""]
 timeout = 3000
 delay = 200
 next = ["t007"]
-givestdout = true
+givestdout = false
 readstdin = false
 
 [[Task]]
@@ -74,7 +74,7 @@ args = ["\"this is task 7\""]
 timeout = 3000
 delay = 200
 next = ["t008"]
-givestdout = true
+givestdout = false
 readstdin = false
 
 [[Task]]
@@ -85,5 +85,5 @@ args = ["\"this is task 8\""]
 timeout = 3000
 delay = 200
 next = [""]
-givestdout = true
+givestdout = false
 readstdin = false
