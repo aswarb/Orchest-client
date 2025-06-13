@@ -48,7 +48,7 @@ func listener(sleeptime int64, requestChannel chan<- Request, ctx context.Contex
 	fmt.Println("Listener Started")
 	replyChannel := make(chan Response)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 
 		t := START_PROCESS_MESSAGE
 		if i%2 == 1 {
@@ -199,6 +199,7 @@ func main() {
 		fmt.Println(task)
 	}
 	taskManager := task.GetTaskManagerFromToml(tasks, segments)
+	fmt.Println(taskManager)
 	taskManager.StartTask(ctx)
 
 	<-sigChan

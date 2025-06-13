@@ -2,6 +2,7 @@ package task
 
 import (
 	"maps"
+	"slices"
 )
 
 type Node interface {
@@ -258,14 +259,14 @@ func (d *DAGResolver) customKahnsAlgorithm(startUids []string, endUids []string)
 		node, exists := d.GetNode(uid)
 		if exists {
 			orderedNodes = append(orderedNodes, node)
+		} else {
+			continue
 		}
 		for _, nextUid := range node.GetNext() {
 			continueLoop := true
-			for _, endUid := range endUids {
-				if endUid == nextUid {
-					continueLoop = false
-					break
-				}
+			if slices.Contains(endUids, nextUid) {
+				continueLoop = false
+				break
 			}
 			if !continueLoop {
 				break
