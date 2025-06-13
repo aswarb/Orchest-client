@@ -1,18 +1,17 @@
 package task
 
-import (
-	"strings"
-)
+import ()
 
 type Task struct {
-	uid           string
-	Name          string
-	CommandString string
-	Timeout       uint64
-	Delay         uint64
-	next          []string
-	GiveStdout    bool
-	ReadStdin     bool
+	uid        string
+	Name       string
+	Executable string
+	Args       []string
+	Timeout    uint64
+	Delay      uint64
+	next       []string
+	GiveStdout bool
+	ReadStdin  bool
 }
 
 func (t *Task) GetUid() string {
@@ -62,18 +61,18 @@ func GetTask(uid string, name string, executable string, args []string, timeout 
 	for _, a := range args {
 		toJoin = append(toJoin, a)
 	}
-	cmd := strings.Join(toJoin, " ")
 
 	task := Task{
 
-		uid:           uid,
-		Name:          name,
-		CommandString: cmd,
-		Timeout:       timeout,
-		Delay:         delay,
-		next:          nextUids,
-		GiveStdout:    givestdout,
-		ReadStdin:     readstdin,
+		uid:        uid,
+		Name:       name,
+		Executable: executable,
+		Args:       args,
+		Timeout:    timeout,
+		Delay:      delay,
+		next:       nextUids,
+		GiveStdout: givestdout,
+		ReadStdin:  readstdin,
 	}
 
 	return &task
