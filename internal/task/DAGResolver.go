@@ -160,19 +160,15 @@ func (d *DAGResolver) GetDownstreamNodes(startNodes []Node) []Node {
 	for len(toExploreQueue) > 0 {
 		node := toExploreQueue[0]
 		downstreamNodes = append(downstreamNodes, node)
-		exploredNodes[node.GetUid()] = struct{}{}
-		toExploreQueue = toExploreQueue[:1]
-
+		toExploreQueue = toExploreQueue[1:]
 		for _, nextUid := range node.GetNext() {
-			nextNode, _ := d.GetNode(nextUid)
-			if _, ok := exploredNodes[nextUid]; ok {
+			nextNode, nextNodeExists := d.GetNode(nextUid)
+			if _, ok := exploredNodes[nextUid]; !ok && nextNodeExists {
 				toExploreQueue = append(toExploreQueue, nextNode)
+				exploredNodes[nextUid] = struct{}{}
 			}
-
 		}
-
 	}
-
 	return downstreamNodes
 }
 
