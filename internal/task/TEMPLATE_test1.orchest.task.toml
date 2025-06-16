@@ -1,0 +1,32 @@
+[[Task]]
+uid = "01"
+name = "input"
+command = "/usr/bin/echo"
+args = ["1"]
+timeout = 3000
+delay = 200
+next = ["02"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "02"
+name = "increment by 1"
+command = "/usr/bin/awk"
+args = ["{ print $1 + 1 }"]
+timeout = 3000
+delay = 200
+next = ["04"]
+givestdout = true
+readstdin = true
+
+[[Task]]
+uid = "04"
+name = "output"
+command = "xargs"
+args = ["notify-send","test"]
+timeout = 3000
+delay = 200
+next = [""]
+givestdout = false
+readstdin = true
