@@ -1,8 +1,8 @@
 [[Task]]
 uid = "01"
 name = "input"
-command = "/usr/bin/echo"
-args = ["1"]
+command = "/usr/bin/bash"
+args = ["-c", "echo 1"]
 timeout = 3000
 delay = 200
 next = ["02"]
@@ -12,19 +12,19 @@ readstdin = false
 [[Task]]
 uid = "02"
 name = "increment by 1"
-command = "/usr/bin/awk"
-args = ["{ print $1 + 1 }"]
+command = "/usr/bin/python3"
+args = ["-c", "import sys; print(int(sys.stdin.read()) + 1)"]
 timeout = 3000
 delay = 200
-next = ["04"]
+next = ["03"]
 givestdout = true
 readstdin = true
 
 [[Task]]
-uid = "04"
+uid = "03"
 name = "output"
-command = "xargs"
-args = ["notify-send","test"]
+command = "/usr/bin/tee"
+args = ["/home/aos/temp/orchest-test-output.txt"]
 timeout = 3000
 delay = 200
 next = [""]
