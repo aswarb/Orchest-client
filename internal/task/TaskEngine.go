@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"fmt"
 	"io"
 	mc "orchest-client/internal/multiClosers"
 	wp "orchest-client/internal/workerpool"
@@ -95,6 +96,8 @@ func (t *TaskEngine) populateCmdMap() {
 // Creates pipes for adjacent nodes
 func (t *TaskEngine) createPipes() {
 
+	t.procStdinReaders = make(map[string]io.ReadCloser)
+	t.procStdoutWriters = make(map[string]io.WriteCloser)
 	stdinEndpoints := make(map[string][]io.ReadCloser)
 	stdoutEndpoints := make(map[string][]io.WriteCloser)
 
@@ -122,7 +125,7 @@ func (t *TaskEngine) createPipes() {
 			}
 			receivingUid := receivingTask.GetUid()
 
-			if _, arrExists := stdinEndpoints[sendingUid]; !arrExists {
+			if _, arrExists := stdoutEndpoints[receivingUid]; !arrExists {
 				stdoutEndpoints[receivingUid] = []io.WriteCloser{}
 			}
 
@@ -153,16 +156,54 @@ func (t *TaskEngine) createPipes() {
 			if len(stdinReaders) > 1 {
 				mr := mc.MakeMultiReadCloser(stdinReaders...)
 				cmd.Stdin = mr
+				t.procStdinReaders[sendingUid] = mr
 			} else if len(stdinReaders) == 1 {
 				cmd.Stdin = stdinReaders[0]
+				t.procStdinReaders[sendingUid] = stdinReaders[0]
 			}
 		}
+
 		if stdoutWriters, arrExists := stdoutEndpoints[sendingUid]; arrExists {
 			if len(stdoutWriters) > 1 {
 				mw := mc.MakeMultiWriteCloser(stdoutWriters...)
 				cmd.Stdout = mw
+				t.procStdoutWriters[sendingUid] = mw
 			} else if len(stdoutWriters) == 1 {
 				cmd.Stdout = stdoutWriters[0]
+				t.procStdoutWriters[sendingUid] = stdoutWriters[0]
+			}
+		}
+	}
+}
+
+type statusUpdate struct {
+	uid      string
+	started  bool
+	finished bool
+}
+type taskCtrlSignal string
+
+const (
+	stdin_msg  taskCtrlSignal = "STDIN"
+	stdout_msg taskCtrlSignal = "STDOUT"
+)
+
+func (t *TaskEngine) singleTaskWithPipeRoutine(outputChan chan statusUpdate, inputChan chan taskCtrlSignal, taskUid string, cmd *exec.Cmd) {
+	outputChan <- statusUpdate{uid: taskUid, started: true, finished: false}
+	err := cmd.Run()
+	fmt.Println(err)
+	outputChan <- statusUpdate{uid: taskUid, started: true, finished: true}
+
+	for range 2 {
+		s := <-inputChan
+		if s == stdout_msg {
+			if stdoutPipe, exists := t.procStdoutWriters[taskUid]; exists {
+				stdoutPipe.Close()
+			}
+		}
+		if s == stdin_msg {
+			if stdinPipe, exists := t.procStdinReaders[taskUid]; exists {
+				stdinPipe.Close()
 			}
 		}
 	}
@@ -172,19 +213,44 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 	t.populateCmdMap()
 	t.createPipes()
 	orderedNodes := t.resolver.GetLinearOrder()
+
+	outputChan := make(chan statusUpdate, 3)
+	taskChannels := make(map[string]chan taskCtrlSignal)
+	for _, n := range orderedNodes {
+		taskChannels[n.GetUid()] = make(chan taskCtrlSignal, 2)
+	}
+	taskPipeManager := func(inputChan chan statusUpdate, taskChannels map[string]chan taskCtrlSignal) {
+		runningTasks := make(map[string]bool)
+		for {
+			status := <-inputChan
+			taskIsRunning := status.started && !status.finished
+			if _, exists := runningTasks[status.uid]; exists {
+				runningTasks[status.uid] = taskIsRunning
+			}
+			if channel, exists := taskChannels[status.uid]; exists && !taskIsRunning {
+				channel <- taskCtrlSignal(stdin_msg)
+				channel <- taskCtrlSignal(stdout_msg)
+			}
+		}
+	}
+	go taskPipeManager(outputChan, taskChannels)
+
 	for _, node := range orderedNodes {
 		task := node.(*Task)
 		segments, segmentSetExists := t.resolver.GetSegments(task.GetUid())
 		segmentSetExists = segmentSetExists || len(segments) > 0
 		if cmd, cmdExists := t.cmdMap[task.GetUid()]; cmdExists && !segmentSetExists {
 			if task.ReadStdin || task.GiveStdout {
-				if task.ReadStdin {
+				if _, bufferExists := t.taskStdinBuffers[task.GetUid()]; bufferExists && task.ReadStdin {
 					// Function to read data from a buffer and put it into stdin:
 					go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
 				}
-				cmd.Start() //non-blocking
+				taskInputChan, _ := taskChannels[task.GetUid()]
+				go t.singleTaskWithPipeRoutine(outputChan, taskInputChan, task.GetUid(), cmd)
+
 			} else {
-				cmd.Run() //blocking
+				err := cmd.Run() //blocking
+				fmt.Println(err)
 			}
 		} else if cmdExists && segmentSetExists {
 			// segment just means parallel block for now, so just start the parallel task
