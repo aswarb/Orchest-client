@@ -91,7 +91,7 @@ func (d *DAGResolver) rebuildSegmentRevIndex() {
 			revIndex[nUid][sUid] = struct{}{}
 		}
 	}
-
+	d.segmentRevMap = revIndex
 }
 
 func (d *DAGResolver) rebuildRevIndex() {
