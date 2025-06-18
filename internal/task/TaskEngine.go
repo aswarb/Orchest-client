@@ -55,7 +55,6 @@ type ParallelTaskArgs struct {
 	segmentUid string
 	endUids    []string
 	outputChan chan packet
-	context    context.Context
 }
 
 func (p ParallelTaskArgs) IsTask() bool { return true }

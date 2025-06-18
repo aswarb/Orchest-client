@@ -19,12 +19,12 @@ type ParallelTomlSegment struct {
 	Uid       string   `toml:"uid"`
 	Name      string   `toml:"name"`
 	StartUids []string `toml:"startMembers"`
-	endUids   []string `toml:"endMembers"`
+	EndUids   []string `toml:"endMembers"`
 }
 
 func (t *ParallelTomlSegment) GetUid() string            { return t.Uid }
 func (t *ParallelTomlSegment) GetStartingUids() []string { return t.StartUids }
-func (t *ParallelTomlSegment) GetEndingUids() []string   { return t.endUids }
+func (t *ParallelTomlSegment) GetEndingUids() []string   { return t.EndUids }
 func (t *ParallelTomlSegment) ToString() string {
 	template, _ := taskTemplate.GetTemplate(taskTemplate.PARALLEL_SEGMENT)
 	fmt.Println(template)
