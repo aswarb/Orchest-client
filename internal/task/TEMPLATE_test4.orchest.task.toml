@@ -1,0 +1,72 @@
+[[Task]]
+uid = "01"
+name = "input"
+command = "/usr/bin/echo"
+args = ["1"]
+timeout = 3000
+delay = 200
+next = ["02"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "02"
+name = "input"
+command = "/usr/bin/python3"
+args = ["-c", "import sys; print(int(sys.stdin.read()) + 1)"]
+timeout = 3000
+delay = 200
+next = ["03","04"]
+givestdout = true
+readstdin = true
+
+[[Task]]
+uid = "03"
+name = "input"
+command = "/usr/bin/python3"
+args = ["-c", "import sys; print(int(sys.stdin.read()) + 2)"]
+timeout = 3000
+delay = 200
+next = ["06"]
+givestdout = true
+readstdin = true
+[[Task]]
+uid = "04"
+name = "input"
+command = "/usr/bin/python3"
+args = ["-c", "import sys; print(int(sys.stdin.read()) + 1)"]
+timeout = 3000
+delay = 200
+next = ["05"]
+givestdout = true
+readstdin = true
+
+[[Task]]
+uid = "05"
+name = "input"
+command = "/usr/bin/xargs"
+args = ["notify-send"]
+timeout = 3000
+delay = 200
+next = [""]
+givestdout = true
+readstdin = true
+
+[[Task]]
+uid = "06"
+name = "input"
+command = "/usr/bin/xargs"
+args = ["notify-send"]
+timeout = 3000
+delay = 200
+next = [""]
+givestdout = false
+readstdin = true
+
+[[Parallel]]
+uid = "p1"
+name = "Parallel 1"
+startMembers = ["01"]
+endMembers = ["05","06"]
+
+
