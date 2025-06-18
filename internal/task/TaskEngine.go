@@ -301,9 +301,10 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	startedTasks := make(map[string]struct{})
 	finishedTasks := make(map[string]struct{})
 
-	outputChannel := make(chan packet)
-	signalChannel := make(chan struct{})
+	outputChannel := make(chan packet, 3)
+	signalChannel := make(chan struct{}, 3)
 
+	fmt.Println("Channels made")
 	for k, v := range incomingCounts {
 		if v < 2 {
 			delete(incomingCounts, k)
