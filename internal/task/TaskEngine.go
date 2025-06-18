@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	mc "orchest-client/internal/multiClosers"
 	wp "orchest-client/internal/workerpool"
 	"os/exec"
+	"slices"
 )
 
 type packet interface {
@@ -265,12 +267,16 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 }
 
 func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context) {
+
+	fmt.Println("starting execution for segment", segmentUid)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	segment, _ := t.resolver.GetSegment(segmentUid)
 	linearOrderedTasks := t.resolver.GetLinearOrderFromSegment(segmentUid)
 
 	incomingCounts := t.resolver.CountIncomingEdges(nil)
+	zeroIncomingCountsFilter := func(k string, v int) bool { return v == 0 }
+	startNodes := maps.Keys(FilterMap(incomingCounts, zeroIncomingCountsFilter))
 	branchCount := 0
 
 	for _, count := range incomingCounts {
@@ -359,45 +365,56 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	}
 	go handleRequestRoutine()
 
-	args := ParallelTaskArgs{
-		startUid:   "",
-		currentUid: "",
-		segmentUid: segment.GetUid(),
-		endUids:    segment.GetEndpointUids(),
-		outputChan: outputChannel,
-		context:    ctx,
-	}
-	parallelExecuteTask := wp.WorkerTask{
-		Args:       args,
-		Execute:    t.onParallelExecute,
-		OnComplete: t.onParallelComplete,
-		OnError:    t.onParallelError,
-	}
-	workerpool.AddTask(&parallelExecuteTask)
+	for uid := range startNodes {
+		args := ParallelTaskArgs{
+			startUid:   uid,
+			currentUid: uid,
+			segmentUid: segment.GetUid(),
+			endUids:    segment.GetEndpointUids(),
+			outputChan: outputChannel,
+		}
+		fmt.Println(args)
 
+		fmt.Println(args)
+		parallelExecuteTask := wp.WorkerTask{
+			Args:       args,
+			Execute:    t.onParallelExecute,
+			OnComplete: t.onParallelComplete,
+			OnError:    t.onParallelError,
+		}
+
+		workerpool.AddTask(&parallelExecuteTask)
+	}
+	workerpool.StartWork(ctx)
 	<-signalChannel // Blocks until correct number of finished tasks completed
-
+	fmt.Println("Stop Signal received")
 	cancelFunc()
 }
 
 func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
-	args := wt.Args.(*ParallelTaskArgs)
-	node, _ := t.resolver.GetNode(args.startUid)
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	args := wt.Args.(ParallelTaskArgs)
+	node, _ := t.resolver.GetNode(args.currentUid)
 	task := node.(*Task)
 	//segment, _ := t.resolver.GetSegment(args.segmentUid)
 
 	args.currentUid = task.GetUid()
 
-	cmd, _ := t.cmdMap[task.GetUid()]
-
-	args.outputChan <- &taskStartedPacket{uid: task.GetUid()}
+	cmd, _ := t.cmdMap[args.currentUid]
+	fmt.Println("starting", args.currentUid, "in parallel")
+	args.outputChan <- &taskStartedPacket{uid: args.currentUid}
 	if task.ReadStdin || task.GiveStdout {
 		// Function to read data from stdout and put it into a buffer:
-		go t.stdoutConsumerFunc(task.GetUid(), args.outputChan, args.context)
-		cmd.Start()
+		if task.GiveStdout {
+			go t.stdoutConsumerFunc(args.currentUid, args.outputChan, ctx)
+		}
+		go func() {
+			cmd.Run()
+			cancelFunc()
+		}()
 	} else {
 		cmd.Run()
-
+		cancelFunc()
 	}
 
 	return nil
@@ -487,12 +504,14 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 	incomingEdgeCounts := t.resolver.CountIncomingEdges(nil)
 	filterFunc := func(k string, v int) bool { return v > 1 }
 	conergencePoints := FilterMap(incomingEdgeCounts, filterFunc)
-	args := wt.Args.(*ParallelTaskArgs)
-	node, _ := t.resolver.GetNode(args.startUid)
+	args := wt.Args.(ParallelTaskArgs)
+	fmt.Println("onComplete:", args.currentUid)
+	node, _ := t.resolver.GetNode(args.currentUid)
 	nextNodes := node.GetNext()
-
+	segment, _ := t.resolver.GetSegment(args.segmentUid)
 	if len(nextNodes) > 1 {
 		for _, uid := range nextNodes {
+			fmt.Println(uid)
 			args := ParallelTaskArgs{
 				startUid:   args.startUid,
 				currentUid: uid,
@@ -507,9 +526,12 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 				OnError:    t.onParallelError,
 			}
 
+			fmt.Println(args)
 			_, isConvergence := conergencePoints[uid]
-
-			if isConvergence {
+			fmt.Println(args.segmentUid)
+			fmt.Println(segment.GetEndpointUids(), args.currentUid)
+			fmt.Println("Segment Contains uid:",!slices.Contains(segment.GetEndpointUids(), args.currentUid))
+			if isConvergence && !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
 				replyChannel := make(chan bool)
 				req := proceedRequestPacket{
 					thisUid:      node.GetUid(),
@@ -521,11 +543,11 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 				if response == true {
 					w.GetTaskChan() <- &nextTask
 				}
-			} else {
+			} else if !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
 				w.GetTaskChan() <- &nextTask
 			}
 		}
-	} else if len(nextNodes) == 1 {
+	} else if len(nextNodes) == 1 && nextNodes[0] != "" {
 
 		args := ParallelTaskArgs{
 			startUid:   args.startUid,
@@ -542,8 +564,12 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 			OnError:    t.onParallelError,
 		}
 
-		taskChannel := w.GetTaskChan()
-		taskChannel <- &nextTask
+			fmt.Println(segment.GetEndpointUids(), args.currentUid)
+			fmt.Println("Segment Contains uid:",!slices.Contains(segment.GetEndpointUids(), args.currentUid))
+		if !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
+			taskChannel := w.GetTaskChan()
+			taskChannel <- &nextTask
+		}
 	}
 
 	completePacket := taskCompletePacket{uid: args.currentUid}
