@@ -90,15 +90,21 @@ func GetTomlTaskArray(path string) ([]TomlTask, []TomlSegment) {
 			case "[[Task]]":
 				var holder SingleTomlTask
 				_, _ = toml.Decode(blob, &holder)
+				//fmt.Println(blob)
 				tasks = append(tasks, &holder)
+
+				//fmt.Println("----")
 			case "[[Parallel]]":
 				var holder ParallelTomlSegment
 				_, _ = toml.Decode(blob, &holder)
+				//fmt.Println(blob)
 				segments = append(segments, &holder)
 			default:
 				continue
 			}
 		}
 	}
+	for _,t := range tasks{fmt.Println(t)}
+	for _,s := range segments{fmt.Println(s)}
 	return tasks, segments
 }

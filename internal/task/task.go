@@ -1,6 +1,6 @@
 package task
 
-import ()
+import "fmt"
 
 type Task struct {
 	uid        string
@@ -86,6 +86,6 @@ func GetParallelSegment(uid string, name string, startUids []string, endUids []s
 		startUids: startUids,
 		endUids:   endUids,
 	}
-
+	fmt.Println(segment)
 	return &segment
 }

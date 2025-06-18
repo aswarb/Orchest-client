@@ -312,6 +312,8 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 			return
 		}
 	}
+
+	fmt.Println("Starting handleRequestRoutine")
 	handleRequestRoutine := func() {
 		for {
 			select {
@@ -350,6 +352,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 						t.taskStdinBuffers[receiver][sender] = make(chan []byte)
 					}
 					channel, _ := t.taskStdinBuffers[receiver][sender]
+					fmt.Println("Buffering:", data, "from", sender)
 					go pushDataToChannel(data, channel, ctx)
 				}
 			}
