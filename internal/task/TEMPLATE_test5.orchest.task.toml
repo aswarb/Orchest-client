@@ -13,23 +13,49 @@ readstdin = false
 uid = "02"
 name = "input"
 command = "/usr/bin/python3"
-args = ["-c", "import sys; print(int(sys.stdin.read()) + 1)"]
+args = ["-c", "import sys; print(1,end='')"]
 timeout = 3000
 delay = 200
-next = ["03","04"]
+next = ["03","04","d02","d02.1"]
 givestdout = true
 readstdin = true
+
+[[Task]]
+uid = "d02"
+name = "input"
+command = "/usr/bin/xargs"
+args = ["notify-send"]
+timeout = 3000
+delay = 200
+next = [""]
+givestdout = false
+readstdin = true
+
+[[Task]]
+uid = "d02.1"
+name = "input"
+command = "/usr/bin/tree"
+args = ["/home/aos/temp/orchest-test-output.txt"]
+timeout = 3000
+delay = 200
+next = [""]
+givestdout = false
+readstdin = true
+
+
+
 
 [[Task]]
 uid = "03"
 name = "input"
 command = "/usr/bin/python3"
-args = ["-c", "import sys; print(int(sys.stdin.read(),end='') + 2)"]
+args = ["-c", "import sys; print(int(sys.stdin.read())+2,end='')"]
 timeout = 3000
 delay = 200
 next = ["05"]
 givestdout = true
 readstdin = true
+
 [[Task]]
 uid = "04"
 name = "input"

@@ -192,7 +192,7 @@ const (
 func (t *TaskEngine) singleTaskWithPipeRoutine(outputChan chan statusUpdate, inputChan chan taskCtrlSignal, taskUid string, cmd *exec.Cmd) {
 	outputChan <- statusUpdate{uid: taskUid, started: true, finished: false}
 	err := cmd.Run()
-	fmt.Println(err)
+	fmt.Println(taskUid, err)
 	outputChan <- statusUpdate{uid: taskUid, started: true, finished: true}
 
 	for range 2 {
