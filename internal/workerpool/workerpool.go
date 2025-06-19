@@ -58,7 +58,7 @@ func (w *Worker) Stop() {
 func MakeWorkerPool(ctx context.Context) WorkerPool {
 
 	thisContext, cancelFunc := context.WithCancel(ctx)
-	taskQueue := make(chan *WorkerTask,10)
+	taskQueue := make(chan *WorkerTask, 10)
 	workerSlice := ([]*Worker{})[:]
 
 	wp := WorkerPool{

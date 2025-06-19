@@ -57,7 +57,7 @@ func GetTaskManagerFromToml(sourceTasks []TomlTask, sourceSegments []TomlSegment
 		case *ParallelTomlSegment:
 			fmt.Println(target)
 			s := target.(*ParallelTomlSegment)
-			fmt.Println("createTaskManager:",s.EndUids)
+			fmt.Println("createTaskManager:", s.EndUids)
 			segment := GetParallelSegment(s.Uid,
 				s.Name,
 				s.StartUids,

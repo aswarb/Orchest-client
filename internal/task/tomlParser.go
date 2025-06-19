@@ -104,7 +104,11 @@ func GetTomlTaskArray(path string) ([]TomlTask, []TomlSegment) {
 			}
 		}
 	}
-	for _,t := range tasks{fmt.Println(t)}
-	for _,s := range segments{fmt.Println(s)}
+	for _, t := range tasks {
+		fmt.Println(t)
+	}
+	for _, s := range segments {
+		fmt.Println(s)
+	}
 	return tasks, segments
 }

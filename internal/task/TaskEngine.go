@@ -391,9 +391,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 			endUids:    segment.GetEndpointUids(),
 			outputChan: outputChannel,
 		}
-		fmt.Println(args)
-
-		fmt.Println(args)
 		parallelExecuteTask := wp.WorkerTask{
 			Args:       args,
 			Execute:    t.onParallelExecute,
@@ -431,6 +428,7 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 		go func() {
 			cmd.Run()
 			cancelFunc()
+
 		}()
 	} else {
 		cmd.Run()
@@ -450,7 +448,6 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packe
 	node, _ := t.resolver.GetNode(sendingUid)
 	task := node.(*Task)
 	nextUids := task.GetNext()
-
 	defer readCloser.Close()
 	for {
 		select {
@@ -546,11 +543,7 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 				OnError:    t.onParallelError,
 			}
 
-			fmt.Println(args)
 			_, isConvergence := conergencePoints[uid]
-			fmt.Println(args.segmentUid)
-			fmt.Println(segment.GetEndpointUids(), args.currentUid)
-			fmt.Println("Segment Contains uid:",!slices.Contains(segment.GetEndpointUids(), args.currentUid))
 			if isConvergence && !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
 				replyChannel := make(chan bool)
 				req := proceedRequestPacket{
@@ -584,16 +577,13 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 			OnError:    t.onParallelError,
 		}
 
-			fmt.Println(segment.GetEndpointUids(), args.currentUid)
-			fmt.Println("Segment Contains uid:",!slices.Contains(segment.GetEndpointUids(), args.currentUid))
+		fmt.Println(segment.GetEndpointUids(), args.currentUid)
+		fmt.Println("Segment Contains uid:", !slices.Contains(segment.GetEndpointUids(), args.currentUid))
 		if !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
 			taskChannel := w.GetTaskChan()
 			taskChannel <- &nextTask
 		}
 	}
-
-	completePacket := taskCompletePacket{uid: args.currentUid}
-	args.outputChan <- &completePacket
 
 }
 func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error) {}
