@@ -216,6 +216,7 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 	t.populateCmdMap()
 	t.createPipes()
 	orderedNodes := t.resolver.GetLinearOrder()
+	exploredNodes := make(map[string]struct{})
 
 	outputChan := make(chan statusUpdate, 3)
 	for _, n := range orderedNodes {
@@ -238,6 +239,11 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 	go taskPipeManager(outputChan)
 
 	for _, node := range orderedNodes {
+		fmt.Println(node)
+		if _, nodeIsExplored := exploredNodes[node.GetUid()]; nodeIsExplored {
+			fmt.Println(node, "explored")
+			continue
+		}
 		task := node.(*Task)
 		segments, segmentSetExists := t.resolver.GetSegments(task.GetUid())
 		segmentSetExists = segmentSetExists || len(segments) > 0
@@ -254,6 +260,7 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 				err := cmd.Run() //blocking
 				fmt.Println(task.GetUid(), err)
 			}
+			exploredNodes[task.GetUid()] = struct{}{}
 		} else if cmdExists && segmentSetExists {
 			// segment just means parallel block for now, so just start the parallel task
 			var segmentUid string
@@ -262,19 +269,22 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 				segmentUid = k
 				break
 			}
-			t.executeParallelTask(segmentUid, ctx)
+			fmt.Println("starting segment", segmentUid)
+			uids := t.executeParallelTask(segmentUid, ctx)
+			for _, uid := range uids {
+				exploredNodes[uid] = struct{}{}
+			}
 		}
 	}
 }
 
-func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context) {
+func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context) []string {
 
 	fmt.Println("starting execution for segment", segmentUid)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	segment, _ := t.resolver.GetSegment(segmentUid)
 	linearOrderedTasks := t.resolver.GetLinearOrderFromSegment(segmentUid)
-
 	incomingCounts := t.resolver.CountIncomingEdges(nil)
 	zeroIncomingCountsFilter := func(k string, v int) bool { return v == 0 }
 	startNodes := maps.Keys(FilterMap(incomingCounts, zeroIncomingCountsFilter))
@@ -321,6 +331,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	}
 
 	fmt.Println("Starting handleRequestRoutine")
+
 	handleRequestRoutine := func() {
 		for {
 			select {
@@ -393,9 +404,11 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		workerpool.AddTask(&parallelExecuteTask)
 	}
 	workerpool.StartWork(ctx)
-	<-signalChannel // Blocks until correct number of finished tasks completed
+	<-signalChannel // B
+
 	fmt.Println("Stop Signal received")
 	cancelFunc()
+	return slices.Collect(maps.Keys(finishedTasks))
 }
 
 func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
