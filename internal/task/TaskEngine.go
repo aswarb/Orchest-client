@@ -526,6 +526,23 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 	node, _ := t.resolver.GetNode(args.currentUid)
 	nextNodes := node.GetNext()
 	segment, _ := t.resolver.GetSegment(args.segmentUid)
+	completePacket := taskCompletePacket{uid: args.currentUid}
+	args.outputChan <- &completePacket
+	inputChan := t.taskChannelMap[args.currentUid]
+	for range 2 {
+		s := <-inputChan
+		if s == stdout_msg {
+			if stdoutPipe, exists := t.procStdoutWriters[args.currentUid]; exists {
+				stdoutPipe.Close()
+			}
+		}
+		if s == stdin_msg {
+			if stdinPipe, exists := t.procStdinReaders[args.currentUid]; exists {
+				stdinPipe.Close()
+			}
+		}
+	}
+
 	if len(nextNodes) > 1 {
 		for _, uid := range nextNodes {
 			fmt.Println(uid)
