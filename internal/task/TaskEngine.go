@@ -68,6 +68,7 @@ func GetTaskEngine(resolver *DAGResolver) *TaskEngine {
 		taskStdinBuffers:  make(map[string]map[string]chan []byte),
 		procStdinReaders:  make(map[string]io.ReadCloser),
 		procStdoutWriters: make(map[string]io.WriteCloser),
+		taskChannelMap:    make(map[string]chan taskCtrlSignal),
 	}
 
 	return &engine
@@ -79,6 +80,7 @@ type TaskEngine struct {
 	taskStdinBuffers  map[string]map[string]chan []byte // {receier_uid: {sender_uid: chan []byte}}
 	procStdinReaders  map[string]io.ReadCloser          //receiver: io.ReadCloser
 	procStdoutWriters map[string]io.WriteCloser         //sender: io.WriteCloser
+	taskChannelMap    map[string]chan taskCtrlSignal
 }
 
 func (t *TaskEngine) populateCmdMap() {
@@ -216,11 +218,10 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 	orderedNodes := t.resolver.GetLinearOrder()
 
 	outputChan := make(chan statusUpdate, 3)
-	taskChannels := make(map[string]chan taskCtrlSignal)
 	for _, n := range orderedNodes {
-		taskChannels[n.GetUid()] = make(chan taskCtrlSignal, 2)
+		t.taskChannelMap[n.GetUid()] = make(chan taskCtrlSignal, 2)
 	}
-	taskPipeManager := func(inputChan chan statusUpdate, taskChannels map[string]chan taskCtrlSignal) {
+	taskPipeManager := func(inputChan chan statusUpdate) {
 		runningTasks := make(map[string]bool)
 		for {
 			status := <-inputChan
@@ -228,13 +229,13 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 			if _, exists := runningTasks[status.uid]; exists {
 				runningTasks[status.uid] = taskIsRunning
 			}
-			if channel, exists := taskChannels[status.uid]; exists && !taskIsRunning {
-				channel <- taskCtrlSignal(stdin_msg)
-				channel <- taskCtrlSignal(stdout_msg)
+			if channel, exists := t.taskChannelMap[status.uid]; exists && !taskIsRunning {
+				channel <- stdin_msg
+				channel <- stdout_msg
 			}
 		}
 	}
-	go taskPipeManager(outputChan, taskChannels)
+	go taskPipeManager(outputChan)
 
 	for _, node := range orderedNodes {
 		task := node.(*Task)
@@ -246,12 +247,12 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 					// Function to read data from a buffer and put it into stdin:
 					go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
 				}
-				taskInputChan, _ := taskChannels[task.GetUid()]
+				taskInputChan, _ := t.taskChannelMap[task.GetUid()]
 				go t.singleTaskWithPipeRoutine(outputChan, taskInputChan, task.GetUid(), cmd)
 
 			} else {
 				err := cmd.Run() //blocking
-				fmt.Println(err)
+				fmt.Println(task.GetUid(), err)
 			}
 		} else if cmdExists && segmentSetExists {
 			// segment just means parallel block for now, so just start the parallel task
@@ -336,6 +337,8 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					if len(finishedTasks) == len(linearOrderedTasks) {
 						signalChannel <- struct{}{}
 					}
+					t.taskChannelMap[uid] <- stdin_msg
+					t.taskChannelMap[uid] <- stdout_msg
 				case *proceedRequestPacket:
 					targetUid := p.getTarget()
 					replyChannel := p.getReplyChannel()
@@ -360,6 +363,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					channel, _ := t.taskStdinBuffers[receiver][sender]
 					fmt.Println("Buffering:", data, "from", sender)
 					go pushDataToChannel(data, channel, ctx)
+
 				}
 			}
 		}
@@ -367,6 +371,8 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	go handleRequestRoutine()
 
 	for uid := range startNodes {
+		t.taskChannelMap[uid] = make(chan taskCtrlSignal, 3)
+
 		args := ParallelTaskArgs{
 			startUid:   uid,
 			currentUid: uid,
