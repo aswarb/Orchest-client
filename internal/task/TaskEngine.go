@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -492,5 +493,49 @@ func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.C
 }
 
 func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
+
+	// close task pipes when task is finished
+	args := wt.Args.(ParallelTaskArgs)
+	node, _ := t.resolver.GetNode(args.currentUid)
+	task, _ := node.(*Task)
+
+	inputChan, _ := t.taskChannelMap[task.uid]
+
+	go func() {
+		stdinClosed := false
+		stdoutClosed := false
+
+		for !stdinClosed || !stdoutClosed {
+			signal := <-inputChan
+
+			if signal == stdin_msg && !stdinClosed {
+				if stdinPipe, pipeExists := t.procStdinReaders[task.GetUid()]; pipeExists {
+					fmt.Println(task.GetUid(), ": Closing Stdin")
+					stdinPipe.Close()
+					stdinClosed = true
+				}
+			}
+			if signal == stdout_msg && !stdoutClosed {
+				if stdoutPipe, pipeExists := t.procStdinReaders[task.GetUid()]; pipeExists {
+					fmt.Println(task.GetUid(), ": Closing Stdout")
+					stdoutPipe.Close()
+					stdoutClosed = true
+				}
+			}
+		}
+		fmt.Println(task.GetUid(), ": All pipes closed")
+	}()
+
+}
+
+func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error) {
+	// Re-queue task if not ready, log error
+
+	switch e := errors.Unwrap(err); e.(type) {
+	case *TaskNotFoundError:
+		fmt.Println(e)
+	default:
+		fmt.Println(e)
+	}
 }
 func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error) {}
