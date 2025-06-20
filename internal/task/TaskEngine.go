@@ -420,7 +420,7 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packe
 	node, _ := t.resolver.GetNode(sendingUid)
 	task := node.(*Task)
 	nextUids := task.GetNext()
-	//defer readCloser.Close()
+	defer readCloser.Close()
 	for {
 		select {
 		case <-ctx.Done():
@@ -454,7 +454,7 @@ func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.C
 	if !writerExists {
 		return
 	}
-	//defer writeCloser.Close()
+	defer writeCloser.Close()
 
 	exhaustedBuffers := make(map[string]struct{})
 	for {
