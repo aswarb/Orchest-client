@@ -324,7 +324,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		}
 	}
 
-	pushDataToChannel := func(data []byte, channel chan []byte, ctx context.Context) {
+	pushToChannel := func(data []byte, channel chan []byte, ctx context.Context) {
 		select {
 		case channel <- data:
 		case <-ctx.Done():
@@ -375,7 +375,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					}
 					channel, _ := t.taskStdinBuffers[receiver][sender]
 					fmt.Println("Buffering:", data, "from", sender)
-					go pushDataToChannel(data, channel, ctx)
+					go pushToChannel(data, channel, ctx)
 
 				}
 			}
