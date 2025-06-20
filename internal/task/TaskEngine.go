@@ -573,4 +573,3 @@ func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error)
 		fmt.Println(e)
 	}
 }
-func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error) {}
