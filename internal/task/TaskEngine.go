@@ -410,10 +410,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	return slices.Collect(maps.Keys(finishedTasks))
 }
 
-func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
-	return nil
-}
-
 // Designed to run as a routine
 func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packet, ctx context.Context) {
 	// Func needs to properly duplicate output to all next nodes
@@ -490,6 +486,45 @@ func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.C
 			break
 		}
 	}
+}
+
+type TaskNotFoundError struct {
+	Uid string
+}
+
+func (e *TaskNotFoundError) Error() string {
+	return fmt.Sprint("Task not found, uidL", e.Uid)
+}
+
+func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
+	// start task
+	args := wt.Args.(ParallelTaskArgs)
+
+	node, nodeExists := t.resolver.GetNode(args.currentUid)
+	if !nodeExists {
+		return &TaskNotFoundError{Uid: args.currentUid}
+	}
+	task := node.(*Task)
+	cmd, cmdExists := t.cmdMap[task.GetUid()]
+
+	if cmdExists && (task.GiveStdout || task.ReadStdin) {
+		if task.ReadStdin {
+			if _, bufferExists := t.taskStdinBuffers[task.GetUid()]; bufferExists && task.ReadStdin {
+				// Function to read data from a buffer and put it into stdin:
+				//go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
+			}
+		}
+		go func() {
+			err := cmd.Run()
+			fmt.Println("onParallelExecute", task.GetUid(), err)
+		}()
+
+	} else if cmdExists {
+		err := cmd.Run()
+		fmt.Println("onParallelExecute", task.GetUid(), err)
+	}
+
+	return nil
 }
 
 func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
