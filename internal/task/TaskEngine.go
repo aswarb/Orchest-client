@@ -233,6 +233,7 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 			if channel, exists := t.taskChannelMap[status.uid]; exists && !taskIsRunning {
 				channel <- stdin_msg
 				channel <- stdout_msg
+				break
 			}
 		}
 	}
@@ -409,32 +410,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 }
 
 func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	args := wt.Args.(ParallelTaskArgs)
-	node, _ := t.resolver.GetNode(args.currentUid)
-	task := node.(*Task)
-	//segment, _ := t.resolver.GetSegment(args.segmentUid)
-
-	args.currentUid = task.GetUid()
-
-	cmd, _ := t.cmdMap[args.currentUid]
-	fmt.Println("starting", args.currentUid, "in parallel")
-	args.outputChan <- &taskStartedPacket{uid: args.currentUid}
-	if task.ReadStdin || task.GiveStdout {
-		// Function to read data from stdout and put it into a buffer:
-		if task.GiveStdout {
-			go t.stdoutConsumerFunc(args.currentUid, args.outputChan, ctx)
-		}
-		go func() {
-			cmd.Run()
-			cancelFunc()
-
-		}()
-	} else {
-		cmd.Run()
-		cancelFunc()
-	}
-
 	return nil
 }
 
@@ -448,7 +423,7 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packe
 	node, _ := t.resolver.GetNode(sendingUid)
 	task := node.(*Task)
 	nextUids := task.GetNext()
-	defer readCloser.Close()
+	//defer readCloser.Close()
 	for {
 		select {
 		case <-ctx.Done():
@@ -482,7 +457,7 @@ func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.C
 	if !writerExists {
 		return
 	}
-	defer writeCloser.Close()
+	//defer writeCloser.Close()
 
 	exhaustedBuffers := make(map[string]struct{})
 	for {
@@ -517,90 +492,5 @@ func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.C
 }
 
 func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
-
-	incomingEdgeCounts := t.resolver.CountIncomingEdges(nil)
-	filterFunc := func(k string, v int) bool { return v > 1 }
-	conergencePoints := FilterMap(incomingEdgeCounts, filterFunc)
-	args := wt.Args.(ParallelTaskArgs)
-	fmt.Println("onComplete:", args.currentUid)
-	node, _ := t.resolver.GetNode(args.currentUid)
-	nextNodes := node.GetNext()
-	segment, _ := t.resolver.GetSegment(args.segmentUid)
-	completePacket := taskCompletePacket{uid: args.currentUid}
-	args.outputChan <- &completePacket
-	inputChan := t.taskChannelMap[args.currentUid]
-	for range 2 {
-		s := <-inputChan
-		if s == stdout_msg {
-			if stdoutPipe, exists := t.procStdoutWriters[args.currentUid]; exists {
-				stdoutPipe.Close()
-			}
-		}
-		if s == stdin_msg {
-			if stdinPipe, exists := t.procStdinReaders[args.currentUid]; exists {
-				stdinPipe.Close()
-			}
-		}
-	}
-
-	if len(nextNodes) > 1 {
-		for _, uid := range nextNodes {
-			fmt.Println(uid)
-			args := ParallelTaskArgs{
-				startUid:   args.startUid,
-				currentUid: uid,
-				segmentUid: args.segmentUid,
-				endUids:    args.endUids,
-				outputChan: args.outputChan,
-			}
-			nextTask := wp.WorkerTask{
-				Args:       args,
-				Execute:    t.onParallelExecute,
-				OnComplete: t.onParallelComplete,
-				OnError:    t.onParallelError,
-			}
-
-			_, isConvergence := conergencePoints[uid]
-			if isConvergence && !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
-				replyChannel := make(chan bool)
-				req := proceedRequestPacket{
-					thisUid:      node.GetUid(),
-					targetUid:    uid,
-					replyChannel: replyChannel,
-				}
-				args.outputChan <- &req
-				response := <-replyChannel
-				if response == true {
-					w.GetTaskChan() <- &nextTask
-				}
-			} else if !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
-				w.GetTaskChan() <- &nextTask
-			}
-		}
-	} else if len(nextNodes) == 1 && nextNodes[0] != "" {
-
-		args := ParallelTaskArgs{
-			startUid:   args.startUid,
-			currentUid: nextNodes[0],
-			segmentUid: args.segmentUid,
-			endUids:    args.endUids,
-			outputChan: args.outputChan,
-		}
-
-		nextTask := wp.WorkerTask{
-			Args:       args,
-			Execute:    t.onParallelExecute,
-			OnComplete: t.onParallelComplete,
-			OnError:    t.onParallelError,
-		}
-
-		fmt.Println(segment.GetEndpointUids(), args.currentUid)
-		fmt.Println("Segment Contains uid:", !slices.Contains(segment.GetEndpointUids(), args.currentUid))
-		if !slices.Contains(segment.GetEndpointUids(), args.currentUid) {
-			taskChannel := w.GetTaskChan()
-			taskChannel <- &nextTask
-		}
-	}
-
 }
 func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error) {}

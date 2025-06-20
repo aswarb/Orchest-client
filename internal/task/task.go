@@ -53,7 +53,6 @@ func (s *ParallelSegment) SetEndUids(uids []string) {
 func (p *ParallelSegment) GetUid() string          { return p.uid }
 func (p *ParallelSegment) GetMemberUids() []string { return p.startUids }
 func (p *ParallelSegment) GetEndpointUids() []string {
-	fmt.Println("segment enduids:", p.endUids)
 	return p.endUids
 }
 
