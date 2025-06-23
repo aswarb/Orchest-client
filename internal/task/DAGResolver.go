@@ -76,7 +76,6 @@ func (d *DAGResolver) GetNextUid(uid string) []string {
 	}
 }
 
-func (d *DAGResolver) GetNextBranchPoint() {}
 func (d *DAGResolver) rebuildSegmentRevIndex() {
 	segments := d.getSegmentMap()
 	revIndex := make(map[string](map[string]struct{}))
@@ -176,7 +175,6 @@ func (d *DAGResolver) GetDownstreamNodes(startNodes []Node) []Node {
 
 func (d *DAGResolver) CountIncomingEdges(nodes []Node) map[string]int {
 	counts := make(map[string]int)
-
 	if len(nodes) == 0 || nodes == nil {
 		allNodes := []Node{}
 		for _, v := range d.GetNodeMap() {

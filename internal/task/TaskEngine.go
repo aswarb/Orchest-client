@@ -318,11 +318,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	signalChannel := make(chan struct{}, 3)
 
 	fmt.Println("Channels made")
-	for k, v := range incomingCounts {
-		if v < 2 {
-			delete(incomingCounts, k)
-		}
-	}
 
 	pushToChannel := func(data []byte, channel chan []byte, ctx context.Context) {
 		select {
@@ -381,7 +376,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 			}
 		}
 	}
-	go handleRequestRoutine()
 
 	for uid := range startNodes {
 		t.taskChannelMap[uid] = make(chan taskCtrlSignal, 3)
