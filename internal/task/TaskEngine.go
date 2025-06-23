@@ -287,30 +287,15 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 
 	segment, _ := t.resolver.GetSegment(segmentUid)
 	linearOrderedTasks := t.resolver.GetLinearOrderFromSegment(segmentUid)
-	incomingCounts := t.resolver.CountIncomingEdges(nil)
+	// Only interested in incoming nodes for nodes in this segment
+	incomingCounts := t.resolver.CountIncomingEdges(linearOrderedTasks)
 	zeroIncomingCountsFilter := func(k string, v int) bool { return v == 0 }
 	startNodes := maps.Keys(FilterMap(incomingCounts, zeroIncomingCountsFilter))
-	branchCount := 0
-
-	for _, count := range incomingCounts {
-		if count == 0 {
-			branchCount++
-		}
-	}
-
-	for _, t := range linearOrderedTasks {
-		uid := t.GetUid()
-		if count, ok := incomingCounts[uid]; ok && count > 1 {
-			branchCount -= count - 1
-		}
-
-		if next := t.GetNext(); len(next) > 1 {
-			branchCount += len(next) - 1
-		}
-	}
 
 	workerpool := wp.MakeWorkerPool(ctx)
-	workerpool.AddWorkers(uint(branchCount))
+	// one worker per task, tasks won't execute until they're queued,
+	// so waiting workers are find to be idle
+	workerpool.AddWorkers(uint(len(incomingCounts)))
 	startedTasks := make(map[string]struct{})
 	finishedTasks := make(map[string]struct{})
 
@@ -326,9 +311,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 			return
 		}
 	}
-
 	fmt.Println("Starting handleRequestRoutine")
-
 	handleRequestRoutine := func() {
 		for {
 			select {
@@ -341,13 +324,14 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					startedTasks[uid] = struct{}{}
 				case *taskCompletePacket:
 					uid := p.getSender()
-					finishedTasks[uid] = struct{}{}
-					if len(finishedTasks) == len(linearOrderedTasks) {
-						signalChannel <- struct{}{}
-					}
 					t.taskChannelMap[uid] <- stdin_msg
 					t.taskChannelMap[uid] <- stdout_msg
+					if len(incomingCounts) == 0 {
+						// Send signal to stop blocking of the main parallel execute function
+						signalChannel <- struct{}{}
+					}
 				case *proceedRequestPacket:
+					// Likely not needed now that queueing tasks is done by the manager, keeping just-in-case
 					targetUid := p.getTarget()
 					replyChannel := p.getReplyChannel()
 					_, ok := startedTasks[targetUid]
