@@ -246,26 +246,19 @@ func (d *DAGResolver) customKahnsAlgorithm(startUids []string, endUids []string)
 
 		delete(zeroDegreeNodes, uid)
 		node, exists := d.GetNode(uid)
-		if exists {
-			orderedNodes = append(orderedNodes, node)
-		} else {
+		if !exists {
+			continue
+		}
+		orderedNodes = append(orderedNodes, node)
+		if slices.Contains(endUids, node.GetUid()) {
 			continue
 		}
 		for _, nextUid := range node.GetNext() {
-			continueLoop := true
-			if slices.Contains(endUids, nextUid) {
-				continueLoop = false
-				break
-			}
-			if !continueLoop {
-				break
-			}
-			_, exists := inEdgesCounts[nextUid]
-			if exists {
+			if _, exists := inEdgesCounts[nextUid]; exists {
 				inEdgesCounts[nextUid]--
-			}
-			if inEdgesCounts[nextUid] <= 0 {
-				zeroDegreeNodes[nextUid] = 0
+				if inEdgesCounts[nextUid] <= 0 {
+					zeroDegreeNodes[nextUid] = 0
+				}
 			}
 		}
 	}
