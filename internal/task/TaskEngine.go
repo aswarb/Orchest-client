@@ -446,7 +446,7 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packe
 			n, err := readCloser.Read(buf)
 			if err != nil {
 				if err == io.EOF {
-					break
+					return
 				}
 				return
 			}
