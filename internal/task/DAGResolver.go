@@ -1,6 +1,7 @@
 package task
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 )
@@ -190,6 +191,7 @@ func (d *DAGResolver) CountIncomingEdges(nodes []Node) map[string]int {
 			counts[node.GetUid()] = 0
 		}
 	}
+	fmt.Println(counts)
 	return counts
 }
 
@@ -202,7 +204,7 @@ func (d *DAGResolver) GetLinearOrderFromSegment(sUid string) []Node {
 	segment, _ := d.GetSegment(sUid)
 
 	orderedNodes := d.customKahnsAlgorithm(segment.GetMemberUids(), segment.GetEndpointUids())
-
+	fmt.Println(orderedNodes)
 	return orderedNodes
 }
 

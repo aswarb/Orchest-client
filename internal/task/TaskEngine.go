@@ -401,7 +401,13 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		}
 
 		workerpool.AddTask(&parallelExecuteTask)
+		fmt.Println(incomingCounts)
+		delete(incomingCounts, uid)
+		fmt.Println(incomingCounts)
 	}
+	go handleRequestRoutine()
+
+	fmt.Println(incomingCounts)
 	workerpool.StartWork(ctx)
 	<-signalChannel // B
 
@@ -508,32 +514,39 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	cmd, cmdExists := t.cmdMap[task.GetUid()]
 
 	if cmdExists && (task.GiveStdout || task.ReadStdin) {
+		ctx, cancelFunc := context.WithCancel(context.Background())
 		if task.ReadStdin {
 			if _, bufferExists := t.taskStdinBuffers[task.GetUid()]; bufferExists && task.ReadStdin {
 				// Function to read data from a buffer and put it into stdin:
-				//go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
+				go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
 			}
 		}
 		go func() {
+			fmt.Println("onParallelExecute-anon", task.GetUid(), "started")
+			args.outputChan <- &taskStartedPacket{uid: args.currentUid}
 			err := cmd.Run()
-			fmt.Println("onParallelExecute", task.GetUid(), err)
+			fmt.Println("onParallelExecute-anon", task.GetUid(), err)
+			args.outputChan <- &taskCompletePacket{uid: args.currentUid}
+			cancelFunc()
+
 		}()
 
 	} else if cmdExists {
 		err := cmd.Run()
 		fmt.Println("onParallelExecute", task.GetUid(), err)
+		args.outputChan <- &taskCompletePacket{uid: args.currentUid}
 	}
 
 	return nil
 }
 
 func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
-
 	// close task pipes when task is finished
 	args := wt.Args.(ParallelTaskArgs)
 	node, _ := t.resolver.GetNode(args.currentUid)
 	task, _ := node.(*Task)
 
+	fmt.Println("onParallelComplete", args.currentUid)
 	inputChan, _ := t.taskChannelMap[task.uid]
 
 	go func() {
@@ -542,7 +555,7 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 
 		for !stdinClosed || !stdoutClosed {
 			signal := <-inputChan
-
+			fmt.Println("onParallelComplete-anon signal received", signal)
 			if signal == stdin_msg && !stdinClosed {
 				if stdinPipe, pipeExists := t.procStdinReaders[task.GetUid()]; pipeExists {
 					fmt.Println(task.GetUid(), ": Closing Stdin")
