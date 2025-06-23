@@ -316,12 +316,44 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		for {
 			select {
 			case <-ctx.Done():
-				break
+				return
 			case output := <-outputChannel:
 				switch p := output.(type) {
 				case *taskStartedPacket:
 					uid := p.getSender()
 					startedTasks[uid] = struct{}{}
+					node, _ := t.resolver.GetNode(uid)
+					for _, nextUid := range node.GetNext() {
+						if count, exists := incomingCounts[nextUid]; exists && count >= 0 {
+							if count > 0 {
+								incomingCounts[nextUid]--
+								count = incomingCounts[nextUid]
+							}
+							if count == 0 {
+								args := ParallelTaskArgs{
+									startUid:   uid,
+									currentUid: nextUid,
+									segmentUid: segment.GetUid(),
+									endUids:    segment.GetEndpointUids(),
+									outputChan: outputChannel,
+								}
+								parallelExecuteTask := wp.WorkerTask{
+									Args:       args,
+									Execute:    t.onParallelExecute,
+									OnComplete: t.onParallelComplete,
+									OnError:    t.onParallelError,
+								}
+								// TODO: Needs check for if next node is in segment and if next node reads stdin
+								// Otherwise buffering won't work properly
+								go t.stdoutConsumerFunc(nextUid, outputChannel, ctx)
+								workerpool.AddTask(&parallelExecuteTask)
+								delete(incomingCounts, nextUid)
+							}
+						} else if (!exists || count < 0) && len(incomingCounts) != 0 {
+							fmt.Println("DING DING DING DING! OPERATOR WE HAVE A PROBLEM. TASK COUNT NEGATIVE OR DOESN'T EXIST")
+							continue
+						}
+					}
 				case *taskCompletePacket:
 					uid := p.getSender()
 					t.taskChannelMap[uid] <- stdin_msg
