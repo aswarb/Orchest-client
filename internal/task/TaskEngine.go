@@ -432,6 +432,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 
 	fmt.Println("Stop Signal received")
 	cancelFunc()
+	fmt.Println("Parallel Segment finished", slices.Collect(maps.Keys(finishedTasks)))
 	return slices.Collect(maps.Keys(finishedTasks))
 }
 
@@ -540,11 +541,12 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 				go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
 			}
 		}
+
+		fmt.Println("onParallelExecute-anon", task.GetUid(), "started")
 		go func() {
-			fmt.Println("onParallelExecute-anon", task.GetUid(), "started")
 			args.outputChan <- &taskStartedPacket{uid: args.currentUid}
 			err := cmd.Run()
-			fmt.Println("onParallelExecute-anon", task.GetUid(), err)
+			fmt.Println("onParallelExecute-anon", task.GetUid(), "Finished with err:", err)
 			args.outputChan <- &taskCompletePacket{uid: args.currentUid}
 			cancelFunc()
 
@@ -565,7 +567,7 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 	node, _ := t.resolver.GetNode(args.currentUid)
 	task, _ := node.(*Task)
 
-	fmt.Println("onParallelComplete", args.currentUid)
+	fmt.Println("onParallelComplete", args.currentUid, "Waiting for close signal")
 	inputChan, _ := t.taskChannelMap[task.uid]
 
 	go func() {
@@ -574,7 +576,7 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 
 		for !stdinClosed || !stdoutClosed {
 			signal := <-inputChan
-			fmt.Println("onParallelComplete-anon signal received", signal)
+			fmt.Println("onParallelComplete-anon", args.currentUid, "signal received", signal)
 			if signal == stdin_msg && !stdinClosed {
 				if stdinPipe, pipeExists := t.procStdinReaders[task.GetUid()]; pipeExists {
 					fmt.Println(task.GetUid(), ": Closing Stdin")
