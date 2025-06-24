@@ -353,22 +353,23 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 								}
 								// TODO: Needs check for if next node is in segment and if next node reads stdin
 								// Otherwise buffering won't work properly
-								go t.stdoutConsumerFunc(nextUid, outputChannel, ctx)
 								workerpool.AddTask(&parallelExecuteTask)
 								delete(incomingCounts, nextUid)
 							}
-						} else if (!exists || count < 0) && len(incomingCounts) != 0 {
-							fmt.Println("DING DING DING DING! OPERATOR WE HAVE A PROBLEM. TASK COUNT NEGATIVE OR DOESN'T EXIST")
-							continue
+						} else if !exists && task.ReadStdin {
+							go t.stdoutConsumerFunc(nextUid, outputChannel, ctx)
 						}
 					}
 				case *taskCompletePacket:
 					uid := p.getSender()
 					t.taskChannelMap[uid] <- stdin_msg
 					t.taskChannelMap[uid] <- stdout_msg
-					if len(incomingCounts) == 0 {
+					finishedTasks[uid] = struct{}{}
+					fmt.Println(len(incomingCounts))
+					if len(finishedTasks) == taskCount {
 						// Send signal to stop blocking of the main parallel execute function
 						signalChannel <- struct{}{}
+						return
 					}
 				case *proceedRequestPacket:
 					// Likely not needed now that queueing tasks is done by the manager, keeping just-in-case
