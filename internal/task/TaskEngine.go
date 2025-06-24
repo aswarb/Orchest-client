@@ -300,7 +300,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	finishedTasks := make(map[string]struct{})
 
 	outputChannel := make(chan packet, 3)
-	signalChannel := make(chan struct{}, 3)
+	signalChannel := make(chan struct{}, 5)
 
 	fmt.Println("Channels made")
 
@@ -312,6 +312,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		}
 	}
 	fmt.Println("Starting handleRequestRoutine")
+	taskCount := len(incomingCounts)
 	handleRequestRoutine := func() {
 		for {
 			select {
@@ -324,6 +325,13 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					startedTasks[uid] = struct{}{}
 					node, _ := t.resolver.GetNode(uid)
 					for _, nextUid := range node.GetNext() {
+						nextNode, nodeExists := t.resolver.GetNode(nextUid)
+						if !nodeExists {
+							continue
+						}
+						task := nextNode.(*Task)
+						// Map should only contain nodes in segment, so if node is absent then it is out of segment
+						// /\ Assumes that DAG is validated before execution and that nodes are not repeated
 						if count, exists := incomingCounts[nextUid]; exists && count >= 0 {
 							if count > 0 {
 								incomingCounts[nextUid]--
