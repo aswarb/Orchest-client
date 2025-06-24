@@ -35,7 +35,7 @@ readstdin = true
 uid = "03"
 name = "input"
 command = "/usr/bin/python3"
-args = ["-c", "import sys; print((sys.stdin.read())+2,end='')"]
+args = ["-c", "import sys; print(int(sys.stdin.read())+2,end='')"]
 timeout = 3000
 delay = 200
 next = ["05"]
@@ -46,7 +46,7 @@ readstdin = true
 uid = "04"
 name = "input"
 command = "/usr/bin/python3"
-args = ["-c", "import sys; print((sys.stdin.read()) + 1,end='')"]
+args = ["-c", "import sys; print(int(sys.stdin.read()) + 1,end='')"]
 timeout = 3000
 delay = 200
 next = ["05"]
