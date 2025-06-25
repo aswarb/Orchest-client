@@ -396,7 +396,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 						t.taskStdinBuffers[receiver] = make(map[string]chan []byte)
 					}
 					if _, ok := t.taskStdinBuffers[receiver][sender]; !ok {
-						t.taskStdinBuffers[receiver][sender] = make(chan []byte)
+						t.taskStdinBuffers[receiver][sender] = make(chan []byte, 100)
 					}
 					channel, _ := t.taskStdinBuffers[receiver][sender]
 					fmt.Println("Buffering:", data, "from", sender)
