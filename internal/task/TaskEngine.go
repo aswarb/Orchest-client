@@ -246,7 +246,7 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 	for _, node := range orderedNodes {
 		fmt.Println(node)
 		if _, nodeIsExplored := exploredNodes[node.GetUid()]; nodeIsExplored {
-			fmt.Println(node, "explored")
+			fmt.Println(node, "explored, skipping")
 			continue
 		}
 		task := node.(*Task)
@@ -256,6 +256,7 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 			if task.ReadStdin || task.GiveStdout {
 				if _, bufferExists := t.taskStdinBuffers[task.GetUid()]; bufferExists && task.ReadStdin {
 					// Function to read data from a buffer and put it into stdin:
+					fmt.Println("Starting buffer consumer for", task.GetUid())
 					go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
 				}
 				taskInputChan, _ := t.taskChannelMap[task.GetUid()]
@@ -317,6 +318,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 	fmt.Println("Starting handleRequestRoutine")
 	taskCount := len(incomingCounts)
 	handleRequestRoutine := func() {
+		//startedConsumers := make(map[string]struct{})
 		for {
 			select {
 			case <-ctx.Done():
@@ -368,7 +370,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					t.taskChannelMap[uid] <- stdin_msg
 					t.taskChannelMap[uid] <- stdout_msg
 					finishedTasks[uid] = struct{}{}
-					fmt.Println(len(incomingCounts))
 					if len(finishedTasks) == taskCount {
 						// Send signal to stop blocking of the main parallel execute function
 						signalChannel <- struct{}{}
@@ -389,7 +390,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					data := bufferPacket.getData()
 					sender := bufferPacket.getSender()
 					receiver := bufferPacket.getTarget()
-
+					fmt.Println("Buffering", data, "From", sender, "To", receiver, "buffer")
 					if _, ok := t.taskStdinBuffers[receiver]; !ok {
 						t.taskStdinBuffers[receiver] = make(map[string]chan []byte)
 					}
@@ -479,35 +480,49 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packe
 }
 
 func (t *TaskEngine) stdinChannelConsumerFunc(receivingUid string, ctx context.Context) {
+
+	// TODO, make sure writer is created, see TODO in createPipes
 	writeCloser, writerExists := t.procStdoutWriters[receivingUid]
+
 	if !writerExists {
+		fmt.Println("here0")
 		return
 	}
 	defer writeCloser.Close()
 
 	exhaustedBuffers := make(map[string]struct{})
+	fmt.Println("here")
 	for {
+		fmt.Println(receivingUid)
 		bufferSet, bufferSetExists := t.taskStdinBuffers[receivingUid]
 		if !bufferSetExists {
-			return
+			continue
 		}
+		fmt.Println("here1")
 		allExhausted := true // Assume no data in buffer
 		for senderUid, buffer := range bufferSet {
 			if _, ok := exhaustedBuffers[senderUid]; ok {
 				continue
 			}
+			fmt.Println("here2")
 			select {
 			case <-ctx.Done():
 				return
 			case data, ok := <-buffer:
+				fmt.Println(ok, data)
+				fmt.Println("here3")
 				if !ok || data == nil {
+					fmt.Println(ok, data)
 					exhaustedBuffers[senderUid] = struct{}{}
 					continue
 				}
+				fmt.Println(ok, data)
 				allExhausted = false // Loop again if you were able to get any data from the buffer
+				fmt.Println("sending", data, "to", receivingUid, "from", senderUid, "buffer")
 				_, err := writeCloser.Write(data)
 				if err != nil {
-					return
+					fmt.Println("here4", err)
+					exhaustedBuffers[senderUid] = struct{}{}
 				}
 			}
 		}
