@@ -13,10 +13,10 @@ readstdin = false
 uid = "02"
 name = "input"
 command = "/usr/bin/python3"
-args = ["-c", "import sys; print(1,end='')"]
+args = ["-c", "import sys; print(int(sys.stdin.read())+1,end='')"]
 timeout = 3000
 delay = 200
-next = ["03","04","d02.1"]
+next = ["03", "04", "d02.1", "d02.2"]
 givestdout = true
 readstdin = true
 
@@ -29,6 +29,29 @@ timeout = 3000
 delay = 200
 next = [""]
 givestdout = false
+readstdin = true
+
+[[Task]]
+uid = "d02.2"
+name = "input"
+command = "/usr/bin/xargs"
+args = ["notify-send"]
+timeout = 3000
+delay = 200
+next = [""]
+givestdout = false
+readstdin = true
+
+
+[[Task]]
+uid = "03"
+name = "input"
+command = "/usr/bin/python3"
+args = ["-c", "import sys; print(int(sys.stdin.read())+2,end='')"]
+timeout = 3000
+delay = 200
+next = ["05"]
+givestdout = true
 readstdin = true
 
 [[Task]]
@@ -56,19 +79,17 @@ readstdin = true
 [[Task]]
 uid = "05"
 name = "input"
-command = "/usr/bin/xargs"
-args = ["notify-send"]
+command = "/usr/bin/tee"
+args = ["/home/aos/temp/orchest-test-output.txt"]
 timeout = 3000
 delay = 200
 next = [""]
 givestdout = false
 readstdin = true
 
-
 [[Parallel]]
 uid = "p1"
 name = "Parallel 1"
 startMembers = ["01"]
-endMembers = ["04","03"]
-
+endMembers = ["04", "03"]
 
