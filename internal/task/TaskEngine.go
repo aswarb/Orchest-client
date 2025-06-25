@@ -472,7 +472,7 @@ func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packe
 				} else {
 					copy(data, buf[:n])
 				}
-				bufferPacket := &bufferDataPacket{thisUid: receivingUid, targetUid: sendingUid, data: data}
+				bufferPacket := &bufferDataPacket{thisUid: sendingUid, targetUid: receivingUid, data: data}
 				outputChan <- bufferPacket
 			}
 
