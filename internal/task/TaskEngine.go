@@ -149,9 +149,9 @@ func (t *TaskEngine) createPipes() {
 		if !ok {
 			continue
 		}
-		sendingUid := task.GetUid()
+		thisUid := task.GetUid()
 
-		cmd, cmdExists := t.cmdMap[sendingUid]
+		cmd, cmdExists := t.cmdMap[thisUid]
 
 		if !cmdExists {
 			continue
@@ -159,27 +159,40 @@ func (t *TaskEngine) createPipes() {
 
 		// TODO: if data needs to be buffered, store both the reader and writer for destination pipe.
 		// Just store the writer and reader under the destination UID in the map, since the previous task doesn't use it
-
-		if stdinReaders, arrExists := stdinEndpoints[sendingUid]; arrExists {
-			if len(stdinReaders) > 1 {
-				mr := mc.MakeMultiReadCloser(stdinReaders...)
-				cmd.Stdin = mr
-				t.procStdinReaders[sendingUid] = mr
-			} else if len(stdinReaders) == 1 {
-				cmd.Stdin = stdinReaders[0]
-				t.procStdinReaders[sendingUid] = stdinReaders[0]
+		needsBuffer := false
+		newPipeRead, newPipeWrite := io.Pipe() // Only used if needsBuffer == true
+		if stdinReaders, arrExists := stdinEndpoints[thisUid]; arrExists && len(stdinReaders) >= 1 {
+			uid := thisUid
+			if needsBuffer {
+				uid = fmt.Sprintf("%s_bufread", thisUid)
 			}
+
+			reader := stdinReaders[0]
+			if len(stdinReaders) > 1 {
+				reader = mc.MakeMultiReadCloser(stdinReaders...)
+			}
+			if needsBuffer {
+				cmd.Stdin = newPipeRead
+			} else {
+				cmd.Stdin = reader
+			}
+			t.procStdinReaders[uid] = reader
 		}
 
-		if stdoutWriters, arrExists := stdoutEndpoints[sendingUid]; arrExists {
-			if len(stdoutWriters) > 1 {
-				mw := mc.MakeMultiWriteCloser(stdoutWriters...)
-				cmd.Stdout = mw
-				t.procStdoutWriters[sendingUid] = mw
-			} else if len(stdoutWriters) == 1 {
-				cmd.Stdout = stdoutWriters[0]
-				t.procStdoutWriters[sendingUid] = stdoutWriters[0]
+		if stdoutWriters, arrExists := stdoutEndpoints[thisUid]; arrExists && len(stdoutWriters) >= 1 {
+			uid := thisUid
+			if needsBuffer {
+				uid = fmt.Sprintf("%s_bufwrite", thisUid)
 			}
+			writer := stdoutWriters[0]
+			if len(stdoutWriters) > 1 {
+				writer = mc.MakeMultiWriteCloser(stdoutWriters...)
+			}
+			cmd.Stdout = writer
+			if needsBuffer {
+				t.procStdoutWriters[uid] = newPipeWrite
+			}
+			t.procStdoutWriters[thisUid] = writer
 		}
 	}
 }
@@ -258,7 +271,7 @@ func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 				if _, bufferExists := t.taskStdinBuffers[task.GetUid()]; bufferExists && task.ReadStdin {
 					// Function to read data from a buffer and put it into stdin:
 					fmt.Println("Starting buffer consumer for", task.GetUid())
-					go t.stdinChannelConsumerFunc(task.GetUid(), ctx)
+					go t.stdinChannelConsumerFunc(fmt.Sprintf("%s_bufread", task.GetUid()), ctx)
 				}
 				taskInputChan, _ := t.taskChannelMap[task.GetUid()]
 				go t.singleTaskWithPipeRoutine(outputChan, taskInputChan, task.GetUid(), cmd)
@@ -364,7 +377,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 							}
 						} else if !exists && task.ReadStdin {
 							fmt.Println("Starting stdout consumer for", uid, "to", nextUid)
-							go t.stdoutConsumerFunc(uid, outputChannel, ctx)
+							go t.stdoutConsumerFunc(fmt.Sprintf("%s_bufwrite", uid), outputChannel, ctx)
 						}
 					}
 				case *taskCompletePacket:
@@ -446,6 +459,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 func (t *TaskEngine) stdoutConsumerFunc(sendingUid string, outputChan chan packet, ctx context.Context) {
 	// Func needs to properly duplicate output to all next nodes
 	readCloser, readerExists := t.procStdinReaders[sendingUid]
+	fmt.Println(t.procStdinReaders)
 	if !readerExists {
 		return
 	}
