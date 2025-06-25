@@ -604,7 +604,7 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 				}
 			}
 			if signal == stdout_msg && !stdoutClosed {
-				if stdoutPipe, pipeExists := t.procStdinReaders[task.GetUid()]; pipeExists {
+				if stdoutPipe, pipeExists := t.procStdoutWriters[task.GetUid()]; pipeExists {
 					fmt.Println(task.GetUid(), ": Closing Stdout")
 					stdoutPipe.Close()
 					stdoutClosed = true
