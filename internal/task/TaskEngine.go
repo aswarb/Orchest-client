@@ -156,6 +156,9 @@ func (t *TaskEngine) createPipes() {
 			continue
 		}
 
+		// TODO: if data needs to be buffered, store both the reader and writer for destination pipe.
+		// Just store the writer and reader under the destination UID in the map, since the previous task doesn't use it
+
 		if stdinReaders, arrExists := stdinEndpoints[sendingUid]; arrExists {
 			if len(stdinReaders) > 1 {
 				mr := mc.MakeMultiReadCloser(stdinReaders...)
