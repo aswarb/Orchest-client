@@ -362,7 +362,8 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 								delete(incomingCounts, nextUid)
 							}
 						} else if !exists && task.ReadStdin {
-							go t.stdoutConsumerFunc(nextUid, outputChannel, ctx)
+							fmt.Println("Starting stdout consumer for", uid, "to", nextUid)
+							go t.stdoutConsumerFunc(uid, outputChannel, ctx)
 						}
 					}
 				case *taskCompletePacket:
