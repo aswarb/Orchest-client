@@ -23,44 +23,38 @@ func (p *PipeWrapper) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-func (p *OutPipeEndpoint) GetEndpoint() io.ReadCloser {
-	return p.end
+	e1 := p.in.Close()
+	e2 := p.out.Close()
+
+	err := errors.Join(e1, e2)
+	if err != nil {
+		return err
+	}
+	p.closed = false
+	return nil
 }
 
-type InPipeEndpoint struct {
-	mu     sync.Mutex
-	closed bool // should reflect whether or not .Close() has been invoked on InPipeEndpoint.end, not a toggle
-	end    io.WriteCloser
-}
+func (p *PipeWrapper) Write(data []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-func (p *InPipeEndpoint) Close() error {
-	err := p.end.Close()
+	_, err := p.in.Write(data)
 	return err
 }
 
-func (p *InPipeEndpoint) isOpen() bool {
-	return p.closed
-}
-func (p *InPipeEndpoint) GetEndpoint() io.WriteCloser {
-	return p.end
-}
+func (p *PipeWrapper) Read(target []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-func MakeInPipeEndpoint(end io.WriteCloser, closed bool) *InPipeEndpoint {
-	endpoint := &InPipeEndpoint{
-		mu:     sync.Mutex{},
-		closed: closed,
-		end:    end,
-	}
-	return endpoint
+	n, err := p.out.Read(target)
+	return n, err
 }
+func (p *PipeWrapper) IsOpen() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-func MakeOutPipeEndpoint(end io.ReadCloser, closed bool) *OutPipeEndpoint {
-	endpoint := &OutPipeEndpoint{
-		mu:     sync.Mutex{},
-		closed: closed,
-		end:    end,
-	}
-	return endpoint
+	val := p.closed
+	return val
 }
 
 type ProcessEndpoint struct {
