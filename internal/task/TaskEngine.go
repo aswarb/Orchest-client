@@ -97,6 +97,22 @@ func (t *TaskEngine) populateCmdMap() {
 
 }
 
+func (t *TaskEngine) createPipesNew() {
+	incomingPipes := make(map[string][]io.ReadCloser)
+	outgoingPipes := make(map[string][]io.WriteCloser)
+
+	allNodes := t.resolver.GetLinearOrder()
+	for _, node := range allNodes {
+		uid := node.GetUid()
+		nextUids := node.GetNext()
+		for _, nUid := range nextUids {
+			pipeReader, pipeWriter := io.Pipe()
+			incomingPipes[nUid] = append(incomingPipes[nUid], pipeReader)
+			outgoingPipes[uid] = append(outgoingPipes[uid], pipeWriter)
+		}
+	}
+}
+
 // Creates pipes for adjacent nodes
 func (t *TaskEngine) createPipes() {
 
