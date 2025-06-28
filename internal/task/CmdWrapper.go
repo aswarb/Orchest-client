@@ -1,31 +1,27 @@
 package task
 
 import (
+	"context"
 	"errors"
 	"io"
+	wp "orchest-client/internal/workerpool"
 	"os/exec"
 	"sync"
 )
 
-type PipeEndpoint interface {
-	isOpen() bool
-	Close() error
-}
-
-type OutPipeEndpoint struct {
+type PipeWrapper struct {
 	mu     sync.Mutex
-	closed bool // should reflect whether or not .Close() has been invoked on InPipeEndpoint.end, not a toggle
-	end    io.ReadCloser
+	closed bool // should reflect whether or not .Close() has been invoked on pipeWrapper.in and PipeWrapper.out, not a toggle
+	in     io.WriteCloser
+	out    io.ReadCloser
 }
 
-func (p *OutPipeEndpoint) Close() error {
-	err := p.end.Close()
-	return err
-}
+func (p *PipeWrapper) GetInWriter() io.WriteCloser { return p.in }
+func (p *PipeWrapper) GetOutReader() io.ReadCloser { return p.out }
 
-func (p *OutPipeEndpoint) isOpen() bool {
-	return p.closed
-}
+func (p *PipeWrapper) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 func (p *OutPipeEndpoint) GetEndpoint() io.ReadCloser {
 	return p.end
