@@ -74,3 +74,20 @@ func (p *CmdWrapper) ClosePipes() error {
 
 	return errors.Join(e1, e2, e3)
 }
+
+func CreateCmdWrapper(executable string, args []string, inPipe *PipeWrapper, outPipe *PipeWrapper) *CmdWrapper {
+	bufReader, bufWriter := io.Pipe()
+	bufPipe := MakePipeWrapper(bufWriter, bufReader)
+
+	cmd := exec.Command(executable, args...)
+	buffer := MakeExtensibleBuffer(5)
+
+	wrapper := CmdWrapper{cmd: cmd,
+		inPipe:         inPipe,
+		outPipe:        outPipe,
+		fromBufferPipe: bufPipe,
+		buffer:         buffer,
+	}
+
+	return &wrapper
+}
