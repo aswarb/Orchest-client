@@ -1,14 +1,12 @@
 package task
 
 import (
-	"context"
 	"sync"
 )
 
 type Buffer interface {
 	Write([]byte) error
 	Read() ([]byte, error)
-	StartConsume(chan<- []byte, chan<- error, context.Context)
 }
 
 func MakeExtensibleBuffer(startLength int) *ExtensibleBuffer {
