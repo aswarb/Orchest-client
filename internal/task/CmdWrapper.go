@@ -64,7 +64,7 @@ func (p *CmdWrapper) startStdinConsumers(ctx context.Context) {
 }
 
 func (p *CmdWrapper) DisableBuffer() {
-
+	p.cmd.Stdin = p.inPipe.GetOutReader()
 }
 
 func (p *CmdWrapper) ClosePipes() error {

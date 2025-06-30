@@ -7,7 +7,7 @@ import (
 )
 
 type PipeWrapper struct {
-	mu     sync.Mutex
+	mu     *sync.Mutex
 	closed bool // should reflect whether or not .Close() has been invoked on pipeWrapper.in and PipeWrapper.out, not a toggle
 	in     io.WriteCloser
 	out    io.ReadCloser
@@ -52,4 +52,19 @@ func (p *PipeWrapper) IsOpen() bool {
 
 	val := p.closed
 	return val
+}
+
+func MakePipeWrapper(writer io.WriteCloser, reader io.ReadCloser) *PipeWrapper {
+
+	mu := sync.Mutex{}
+
+	wrapper := PipeWrapper{
+		mu:     &mu,
+		closed: false,
+		in:     writer,
+		out:    reader,
+	}
+
+	return &wrapper
+
 }
