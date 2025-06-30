@@ -16,16 +16,16 @@ type CmdWrapper struct {
 	buffer         Buffer
 }
 
-func (p *ProcessEndpoint) BufferedStdinWrite(data []byte) {
+func (p *CmdWrapper) BufferedStdinWrite(data []byte) {
 
 }
 
-func (p *ProcessEndpoint) ExecuteBlocking() error {
+func (p *CmdWrapper) ExecuteBlocking() error {
 	err := p.cmd.Run()
 	return err
 }
 
-func (p *ProcessEndpoint) EnableBuffer() {
+func (p *CmdWrapper) EnableBuffer() {
 	p.cmd.Stdin = p.fromBufferPipe.GetOutReader()
 }
 
@@ -34,7 +34,7 @@ type consumerTaskArgs struct {
 
 func (c *consumerTaskArgs) IsTask() bool
 
-func (p *ProcessEndpoint) startStdinConsumers(ctx context.Context) {
+func (p *CmdWrapper) startStdinConsumers(ctx context.Context) {
 	consumerFuncExecute := func(w *wp.Worker, wt *wp.WorkerTask) error {
 		for {
 			data := make([]byte, 4096)
@@ -63,13 +63,14 @@ func (p *ProcessEndpoint) startStdinConsumers(ctx context.Context) {
 	workerpool.StartWork(ctx)
 }
 
-func (p *ProcessEndpoint) DisableBuffer() {
+func (p *CmdWrapper) DisableBuffer() {
 
 }
 
-func (p *ProcessEndpoint) ClosePipes() error {
+func (p *CmdWrapper) ClosePipes() error {
 	e1 := p.inPipe.Close()
 	e2 := p.outPipe.Close()
+	e3 := p.fromBufferPipe.Close()
 
-	return errors.Join(e1, e2)
+	return errors.Join(e1, e2, e3)
 }
