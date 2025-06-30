@@ -101,16 +101,62 @@ func (t *TaskEngine) createPipesNew() {
 	incomingPipes := make(map[string][]io.ReadCloser)
 	outgoingPipes := make(map[string][]io.WriteCloser)
 
+	wrappedCmds := make(map[string]*CmdWrapper)
+
 	allNodes := t.resolver.GetLinearOrder()
 	for _, node := range allNodes {
 		uid := node.GetUid()
+		prevTask := node.(*Task)
 		nextUids := node.GetNext()
 		for _, nUid := range nextUids {
+			nextNode, nextNodeExists := t.resolver.GetNode(nUid)
+			if !nextNodeExists {
+				continue
+			}
+			nextTask := nextNode.(*Task)
 			pipeReader, pipeWriter := io.Pipe()
-			incomingPipes[nUid] = append(incomingPipes[nUid], pipeReader)
-			outgoingPipes[uid] = append(outgoingPipes[uid], pipeWriter)
+			// Assume stdin-stdout pairs have already been validated
+			// Note: this means nothing should take on stdin without at least 1 task pointing to it that gives stdout
+			if nextTask.ReadStdin && prevTask.GiveStdout {
+				incomingPipes[nUid] = append(incomingPipes[nUid], pipeReader)
+				outgoingPipes[uid] = append(outgoingPipes[uid], pipeWriter)
+			}
 		}
 	}
+
+	for _, node := range allNodes {
+		uid := node.GetUid()
+		incoming, _ := incomingPipes[uid]
+		outgoing, _ := outgoingPipes[uid]
+		if len(incoming) > 1 {
+			incomingPipes[uid] = []io.ReadCloser{mc.MakeMultiReadCloser(incoming...)}
+		}
+		if len(outgoing) > 1 {
+			outgoingPipes[uid] = []io.WriteCloser{mc.MakeMultiWriteCloser(outgoing...)}
+		}
+	}
+
+	for _, node := range allNodes {
+		uid := node.GetUid()
+
+		outgoing, outgoingExists := outgoingPipes[uid]
+		if !outgoingExists {
+			continue
+		}
+		outpoint := outgoing[0]
+		for _, nUid := range node.GetNext() {
+
+			incoming, incomingExists := incomingPipes[nUid]
+			if !incomingExists {
+				continue
+			}
+			inpoint := incoming[0]
+			pipeWrapper := MakePipeWrapper(outpoint, inpoint)
+			// TODO, remove pipeWrapper - not needed, adjust cmdWrapper to not need it
+		}
+
+	}
+
 }
 
 // Creates pipes for adjacent nodes
