@@ -40,24 +40,65 @@ func (p *CmdWrapper) EnableBuffer(ctx context.Context) {
 type consumerTaskArgs struct {
 }
 
-func (c *consumerTaskArgs) IsTask() bool
+func (c *consumerTaskArgs) IsTask() bool { return true }
 
-func (p *CmdWrapper) startStdinConsumers(ctx context.Context) {
+func (p *CmdWrapper) startBufConsumer(ctx context.Context) {
 	consumerFuncExecute := func(w *wp.Worker, wt *wp.WorkerTask) error {
 		for {
-			data := make([]byte, 4096)
-			n, err := p.inPipe.Read(data)
-			data = data[:n]
-			if err == io.EOF {
-				return io.EOF
-			}
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				data, err := p.buffer.Read()
 
-			p.buffer.Write(data)
+				if err != nil {
+					return err
+				}
+
+				_, err = p.bufPipeInPoint.Write(data)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
 	consumerFuncComplete := func(*wp.Worker, *wp.WorkerTask) {}
-	consumerFuncError := func(*wp.Worker, *wp.WorkerTask, error) {}
+	consumerFuncError := func(w *wp.Worker, wt *wp.WorkerTask, err error) { fmt.Println(err) }
+
+	workerpool := wp.MakeWorkerPool(ctx)
+	taskArgs := consumerTaskArgs{}
+	workerpool.AddWorkers(uint(1))
+	task := wp.WorkerTask{Args: &taskArgs,
+		Execute:    consumerFuncExecute,
+		OnComplete: consumerFuncComplete,
+		OnError:    consumerFuncError,
+	}
+	workerpool.AddTask(&task)
+	workerpool.StartWork(ctx)
+}
+
+func (p *CmdWrapper) startStdinConsumer(ctx context.Context) {
+	consumerFuncExecute := func(w *wp.Worker, wt *wp.WorkerTask) error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				data := make([]byte, 4096)
+				n, err := p.inPoint.Read(data)
+				data = data[:n]
+				if err == io.EOF {
+					return io.EOF
+				}
+
+				p.buffer.Write(data)
+			}
+		}
+	}
+
+	consumerFuncComplete := func(*wp.Worker, *wp.WorkerTask) {}
+	consumerFuncError := func(w *wp.Worker, wt *wp.WorkerTask, err error) { fmt.Println(err) }
 
 	workerpool := wp.MakeWorkerPool(ctx)
 	taskArgs := consumerTaskArgs{}
