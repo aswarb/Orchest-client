@@ -28,8 +28,13 @@ func (p *CmdWrapper) ExecuteBlocking() error {
 	return err
 }
 
-func (p *CmdWrapper) EnableBuffer() {
-	p.cmd.Stdin = p.fromBufferPipe.GetOutReader()
+func (p *CmdWrapper) EnableBuffer(ctx context.Context) {
+	if !p.bufferEnabled {
+		p.cmd.Stdin = p.bufPipeOutPoint
+
+		p.startStdinConsumer(ctx) // consumer for stdin point -> buffer
+		p.startBufConsumer(ctx)   // consumer for buffer -> true cmd stdin
+	}
 }
 
 type consumerTaskArgs struct {
