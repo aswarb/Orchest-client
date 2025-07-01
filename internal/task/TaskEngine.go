@@ -315,6 +315,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 						} else if !exists {
 							// If node is not in incoming counts map, it is not part of the segment,
 							// therefore it needs a buffer if it reads stdin
+							// NOTE: This may be redundat in most cases, but may also be needed in the event that different segments feed each other
 							nextCmd, cmdExists := t.cmdMap[nextUid]
 							if cmdExists && task.GiveStdout && nextTask.ReadStdin {
 								nextCmd.EnableBuffer(ctx)
