@@ -405,26 +405,28 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					uid := p.getSender()
 					startedTasks[uid] = struct{}{}
 					node, _ := t.resolver.GetNode(uid)
+					task := node.(*Task)
 					for _, nextUid := range node.GetNext() {
 						nextNode, nodeExists := t.resolver.GetNode(nextUid)
 						if !nodeExists {
 							continue
 						}
-						task := nextNode.(*Task)
+						nextTask := nextNode.(*Task)
 						// Map should only contain nodes in segment, so if node is absent then it is out of segment
 						// /\ Assumes that DAG is validated before execution and that nodes are not repeated
-						if count, exists := incomingCounts[nextUid]; exists && count >= 0 {
+						if count, exists := incomingCounts[nextUid]; exists {
 							if count > 0 {
 								incomingCounts[nextUid]--
 								count = incomingCounts[nextUid]
 							}
 							if count == 0 {
 								args := ParallelTaskArgs{
-									startUid:   uid,
-									currentUid: nextUid,
-									segmentUid: segment.GetUid(),
-									endUids:    segment.GetEndpointUids(),
-									outputChan: outputChannel,
+									startUid:    uid,
+									currentUid:  nextUid,
+									segmentUid:  segment.GetUid(),
+									endUids:     segment.GetEndpointUids(),
+									outputChan:  outputChannel,
+									needsBuffer: false,
 								}
 								parallelExecuteTask := wp.WorkerTask{
 									Args:       args,
@@ -487,11 +489,12 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		t.taskChannelMap[uid] = make(chan taskCtrlSignal, 3)
 
 		args := ParallelTaskArgs{
-			startUid:   uid,
-			currentUid: uid,
-			segmentUid: segment.GetUid(),
-			endUids:    segment.GetEndpointUids(),
-			outputChan: outputChannel,
+			startUid:    uid,
+			currentUid:  uid,
+			segmentUid:  segment.GetUid(),
+			endUids:     segment.GetEndpointUids(),
+			outputChan:  outputChannel,
+			needsBuffer: false,
 		}
 		parallelExecuteTask := wp.WorkerTask{
 			Args:       args,
