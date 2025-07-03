@@ -81,7 +81,7 @@ func (p *CmdWrapper) startBufConsumer(ctx context.Context) {
 
 	workerpool := wp.MakeWorkerPool(ctx)
 	taskArgs := consumerTaskArgs{}
-	workerpool.AddWorkers(uint(1))
+	workerpool.AddWorkers(uint(2))
 	task := wp.WorkerTask{Args: &taskArgs,
 		Execute:    consumerFuncExecute,
 		OnComplete: consumerFuncComplete,
@@ -119,7 +119,7 @@ func (p *CmdWrapper) startStdinConsumer(ctx context.Context) {
 
 	workerpool := wp.MakeWorkerPool(ctx)
 	taskArgs := consumerTaskArgs{}
-	workerpool.AddWorkers(uint(1))
+	workerpool.AddWorkers(uint(2))
 	task := wp.WorkerTask{Args: &taskArgs,
 		Execute:    consumerFuncExecute,
 		OnComplete: consumerFuncComplete,
