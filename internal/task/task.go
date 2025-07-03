@@ -50,8 +50,8 @@ func (s *ParallelSegment) SetEndUids(uids []string) {
 	s.endUids = uids
 }
 
-func (p *ParallelSegment) GetUid() string          { return p.uid }
-func (p *ParallelSegment) GetMemberUids() []string { return p.startUids }
+func (p *ParallelSegment) GetUid() string         { return p.uid }
+func (p *ParallelSegment) GetStartUids() []string { return p.startUids }
 func (p *ParallelSegment) GetEndpointUids() []string {
 	return p.endUids
 }

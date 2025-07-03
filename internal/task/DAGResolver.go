@@ -15,7 +15,7 @@ type Node interface {
 
 type Segment interface {
 	GetUid() string
-	GetMemberUids() []string
+	GetStartUids() []string
 	GetEndpointUids() []string
 	AddStartUid(string)
 	AddEndUid(string)

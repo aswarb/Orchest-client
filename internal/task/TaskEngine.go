@@ -29,33 +29,9 @@ type taskCompletePacket struct {
 func (p *taskCompletePacket) isPacket() bool    { return true }
 func (p *taskCompletePacket) getSender() string { return p.uid }
 
-type proceedRequestPacket struct {
-	thisUid      string
-	targetUid    string
-	replyChannel chan bool // False for deny request, True for request granted
-}
-
-func (p *proceedRequestPacket) isPacket() bool             { return true }
-func (p *proceedRequestPacket) getSender() string          { return p.thisUid }
-func (p *proceedRequestPacket) getTarget() string          { return p.targetUid }
-func (p *proceedRequestPacket) getReplyChannel() chan bool { return p.replyChannel }
-
-type bufferDataPacket struct {
-	thisUid   string
-	targetUid string
-	data      []byte
-}
-
-func (p *bufferDataPacket) isPacket() bool    { return true }
-func (p *bufferDataPacket) getSender() string { return p.thisUid }
-func (p *bufferDataPacket) getTarget() string { return p.targetUid }
-func (p *bufferDataPacket) getData() []byte   { return p.data }
-
 type ParallelTaskArgs struct {
 	startUid   string
 	currentUid string
-	segmentUid string
-	endUids    []string
 	outputChan chan packet
 }
 
@@ -170,105 +146,16 @@ const (
 	stdout_msg taskCtrlSignal = "STDOUT"
 )
 
-func (t *TaskEngine) singleTaskWithPipeRoutine(outputChan chan statusUpdate, inputChan chan taskCtrlSignal, taskUid string, cmd *CmdWrapper) {
-	outputChan <- statusUpdate{uid: taskUid, started: true, finished: false}
-	err := cmd.ExecuteBlocking()
-	fmt.Println(taskUid, err)
-	outputChan <- statusUpdate{uid: taskUid, started: true, finished: true}
-
-	for range 2 {
-		s := <-inputChan
-		if s == stdout_msg {
-			cmd.CloseStdout()
-		}
-		if s == stdin_msg {
-			cmd.CloseStdin()
-		}
-	}
-}
-
 func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
 	t.createPipesNew()
-	orderedNodes := t.resolver.GetLinearOrder()
-	exploredNodes := make(map[string]struct{})
-
-	outputChan := make(chan statusUpdate, 3)
-	for _, n := range orderedNodes {
-		t.taskChannelMap[n.GetUid()] = make(chan taskCtrlSignal, 2)
-	}
-	taskPipeManager := func(inputChan chan statusUpdate) {
-		runningTasks := make(map[string]bool)
-		for {
-			status := <-inputChan
-			taskIsRunning := status.started && !status.finished
-			if _, exists := runningTasks[status.uid]; exists {
-				runningTasks[status.uid] = taskIsRunning
-			}
-			if channel, exists := t.taskChannelMap[status.uid]; exists && !taskIsRunning {
-				channel <- stdin_msg
-				channel <- stdout_msg
-				break
-			}
-		}
-	}
-	go taskPipeManager(outputChan)
-
-	consumerCtx, consumerCancelFunc := context.WithCancel(ctx)
-	for _, node := range orderedNodes {
-		fmt.Println(node)
-		if _, nodeIsExplored := exploredNodes[node.GetUid()]; nodeIsExplored {
-			fmt.Println(node, "explored, skipping")
-			continue
-		}
-		task := node.(*Task)
-		segments, segmentSetExists := t.resolver.GetSegments(task.GetUid())
-		segmentSetExists = segmentSetExists || len(segments) > 0
-		if cmd, cmdExists := t.cmdMap[task.GetUid()]; cmdExists && !segmentSetExists {
-			if task.ReadStdin || task.GiveStdout {
-				incomingNodes, ok := t.resolver.GetIncomingNodes(task.GetUid())
-				if ok {
-					for _, node := range incomingNodes {
-						segmentSet, segmentSetExists := t.resolver.GetSegments(node.GetUid())
-						if segmentSetExists && len(segmentSet) != 0 {
-							fmt.Println("Starting buffer consumer for", task.GetUid())
-							cmd.EnableBuffer(consumerCtx)
-							break
-						}
-					}
-				}
-				taskInputChan, _ := t.taskChannelMap[task.GetUid()]
-				go t.singleTaskWithPipeRoutine(outputChan, taskInputChan, task.GetUid(), cmd)
-
-			} else {
-				err := cmd.ExecuteBlocking()
-				fmt.Println(task.GetUid(), err)
-			}
-			exploredNodes[task.GetUid()] = struct{}{}
-		} else if cmdExists && segmentSetExists {
-			// segment just means parallel block for now, so just start the parallel task
-			var segmentUid string
-			// segments list should only be of len = 1
-			for k := range segments {
-				segmentUid = k
-				break
-			}
-			fmt.Println("starting segment", segmentUid)
-			uids := t.executeParallelTask(segmentUid, ctx)
-			for _, uid := range uids {
-				exploredNodes[uid] = struct{}{}
-			}
-		}
-	}
-	consumerCancelFunc()
+	t.executeParallelTask(ctx)
 }
 
-func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context) []string {
+func (t *TaskEngine) executeParallelTask(ctx context.Context) []string {
 
-	fmt.Println("starting execution for segment", segmentUid)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	segment, _ := t.resolver.GetSegment(segmentUid)
-	linearOrderedTasks := t.resolver.GetLinearOrderFromSegment(segmentUid)
+	linearOrderedTasks := t.resolver.GetLinearOrder()
 	// Only interested in incoming nodes for nodes in this segment
 	incomingCounts := t.resolver.CountIncomingEdges(linearOrderedTasks)
 	zeroIncomingCountsFilter := func(k string, v int) bool { return v == 0 }
@@ -301,13 +188,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					node, _ := t.resolver.GetNode(uid)
 					fmt.Println(incomingCounts)
 					for _, nextUid := range node.GetNext() {
-						nextNode, nodeExists := t.resolver.GetNode(nextUid)
-						if !nodeExists {
-							continue
-						}
-						nextTask := nextNode.(*Task)
-						// Map should only contain nodes in segment, so if node is absent then it is out of segment
-						// /\ Assumes that DAG is validated before execution and that nodes are not repeated
 						if count, exists := incomingCounts[nextUid]; exists {
 							fmt.Println("parallelExecuteTask-manager", "Starting task", nextUid)
 							if count > 0 {
@@ -319,8 +199,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 								args := ParallelTaskArgs{
 									startUid:   uid,
 									currentUid: nextUid,
-									segmentUid: segment.GetUid(),
-									endUids:    segment.GetEndpointUids(),
 									outputChan: outputChannel,
 								}
 								parallelExecuteTask := wp.WorkerTask{
@@ -347,16 +225,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 						signalChannel <- struct{}{}
 						return
 					}
-				case *proceedRequestPacket:
-					// Likely not needed now that queueing tasks is done by the manager, keeping just-in-case
-					targetUid := p.getTarget()
-					replyChannel := p.getReplyChannel()
-					_, ok := startedTasks[targetUid]
-					if ok {
-						replyChannel <- true
-					} else {
-						replyChannel <- false
-					}
 				}
 			}
 		}
@@ -368,8 +236,6 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		args := ParallelTaskArgs{
 			startUid:   uid,
 			currentUid: uid,
-			segmentUid: segment.GetUid(),
-			endUids:    segment.GetEndpointUids(),
 			outputChan: outputChannel,
 		}
 		parallelExecuteTask := wp.WorkerTask{
@@ -380,17 +246,13 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 		}
 
 		workerpool.AddTask(&parallelExecuteTask)
-		fmt.Println(incomingCounts)
 		delete(incomingCounts, uid)
-		fmt.Println(incomingCounts)
 	}
 	go handleRequestRoutine()
 
-	fmt.Println(incomingCounts)
 	workerpool.StartWork(ctx)
 	<-signalChannel // B
 
-	fmt.Println("Stop Signal received")
 	cancelFunc()
 	fmt.Println("Parallel Segment finished", slices.Collect(maps.Keys(finishedTasks)))
 	return slices.Collect(maps.Keys(finishedTasks))

@@ -114,7 +114,7 @@ func (p *WorkerPool) StartWork(parentContext context.Context) {
 		p.cancelFunc()
 	}()
 
-	for i, _ := range p.allWorkers {
+	for i := range p.allWorkers {
 		go p.allWorkers[i].Run(p.context)
 	}
 }
