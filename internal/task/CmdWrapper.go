@@ -104,11 +104,13 @@ func (p *CmdWrapper) startStdinConsumer(ctx context.Context) {
 			default:
 				data := make([]byte, 4096)
 				n, err := p.inPoint.Read(data)
-				data = data[:n]
+
+				fmt.Println("Read", data, "from cmd with exec:", p.cmd.Path)
 				if err == io.EOF {
 					return io.EOF
 				}
-
+				data = data[:n]
+				fmt.Println("Buffering", data, "in cmd with exec:", p.cmd.Path)
 				p.buffer.Write(data)
 			}
 		}

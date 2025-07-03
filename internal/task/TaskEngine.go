@@ -84,8 +84,10 @@ func (t *TaskEngine) createPipesNew() {
 	wrappedCmds := make(map[string]*CmdWrapper)
 
 	allNodes := t.resolver.GetLinearOrder()
+	fmt.Println("createPipesNew allNodes", allNodes)
 	for _, node := range allNodes {
 		uid := node.GetUid()
+		fmt.Println("createPipesNew trying to create pipe end for", uid)
 		prevTask := node.(*Task)
 		nextUids := node.GetNext()
 		for _, nUid := range nextUids {
@@ -98,6 +100,15 @@ func (t *TaskEngine) createPipesNew() {
 			// Assume stdin-stdout pairs have already been validated
 			// Note: this means nothing should take on stdin without at least 1 task pointing to it that gives stdout
 			if nextTask.ReadStdin && prevTask.GiveStdout {
+
+				if _, exists := incomingPipes[nUid]; !exists {
+					incomingPipes[nUid] = []io.ReadCloser{}
+				}
+
+				if _, exists := outgoingPipes[uid]; !exists {
+					outgoingPipes[uid] = []io.WriteCloser{}
+				}
+				fmt.Println("createPipesNew storing pipe ends from ", uid, "to", nUid)
 				incomingPipes[nUid] = append(incomingPipes[nUid], pipeReader)
 				outgoingPipes[uid] = append(outgoingPipes[uid], pipeWriter)
 			}
@@ -106,18 +117,25 @@ func (t *TaskEngine) createPipesNew() {
 
 	for _, node := range allNodes {
 		uid := node.GetUid()
+
+		fmt.Println("createPipesNew Getting pipe ends for ", uid)
+		fmt.Println("incomingPipes:", incomingPipes)
 		incoming, _ := incomingPipes[uid]
+		fmt.Println("outgoingPipes:", outgoingPipes)
 		outgoing, _ := outgoingPipes[uid]
 		if len(incoming) > 1 {
+			fmt.Println("createPipesNew binding many incoming ends for ", uid)
 			incomingPipes[uid] = []io.ReadCloser{mc.MakeMultiReadCloser(incoming...)}
 		}
 		if len(outgoing) > 1 {
+			fmt.Println("createPipesNew binding many outgoing ends for ", uid)
 			outgoingPipes[uid] = []io.WriteCloser{mc.MakeMultiWriteCloser(outgoing...)}
 		}
 	}
 
 	for _, node := range allNodes {
 		uid := node.GetUid()
+		fmt.Println("createPipesNew trying to wrap endpoints for", uid)
 		task := node.(*Task)
 		outgoing, outgoingExists := outgoingPipes[uid]
 		if !outgoingExists {
@@ -136,6 +154,8 @@ func (t *TaskEngine) createPipesNew() {
 		wrappedCmds[uid] = wrapper
 	}
 	t.cmdMap = wrappedCmds
+	fmt.Println(wrappedCmds)
+
 }
 
 type statusUpdate struct {
@@ -279,7 +299,7 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 					uid := p.getSender()
 					startedTasks[uid] = struct{}{}
 					node, _ := t.resolver.GetNode(uid)
-					task := node.(*Task)
+					fmt.Println(incomingCounts)
 					for _, nextUid := range node.GetNext() {
 						nextNode, nodeExists := t.resolver.GetNode(nextUid)
 						if !nodeExists {
@@ -289,10 +309,12 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 						// Map should only contain nodes in segment, so if node is absent then it is out of segment
 						// /\ Assumes that DAG is validated before execution and that nodes are not repeated
 						if count, exists := incomingCounts[nextUid]; exists {
+							fmt.Println("parallelExecuteTask-manager", "Starting task", nextUid)
 							if count > 0 {
 								incomingCounts[nextUid]--
 								count = incomingCounts[nextUid]
 							}
+							fmt.Println(incomingCounts)
 							if count == 0 {
 								args := ParallelTaskArgs{
 									startUid:   uid,
@@ -307,24 +329,16 @@ func (t *TaskEngine) executeParallelTask(segmentUid string, ctx context.Context)
 									OnComplete: t.onParallelComplete,
 									OnError:    t.onParallelError,
 								}
-								// TODO: Needs check for if next node is in segment and if next node reads stdin
-								// Otherwise buffering won't work properly
+								t.taskChannelMap[nextUid] = make(chan taskCtrlSignal)
 								workerpool.AddTask(&parallelExecuteTask)
 								delete(incomingCounts, nextUid)
 							}
-						} else if !exists {
-							// If node is not in incoming counts map, it is not part of the segment,
-							// therefore it needs a buffer if it reads stdin
-							// NOTE: This may be redundat in most cases, but may also be needed in the event that different segments feed each other
-							nextCmd, cmdExists := t.cmdMap[nextUid]
-							if cmdExists && task.GiveStdout && nextTask.ReadStdin {
-								nextCmd.EnableBuffer(ctx)
-							}
-
 						}
 					}
 				case *taskCompletePacket:
 					uid := p.getSender()
+					fmt.Println("taskCompletePacket received from", uid)
+					fmt.Println(t.taskChannelMap)
 					t.taskChannelMap[uid] <- stdin_msg
 					t.taskChannelMap[uid] <- stdout_msg
 					finishedTasks[uid] = struct{}{}
@@ -400,48 +414,53 @@ func (t *TaskEngine) onParallelExecute(w *wp.Worker, wt *wp.WorkerTask) error {
 	}
 	task := node.(*Task)
 	cmd, cmdExists := t.cmdMap[task.GetUid()]
-
+	fmt.Println("onParallelExecute trying to start", task.GetUid())
 	if cmdExists && (task.GiveStdout || task.ReadStdin) {
+		fmt.Println("onParallelExecute trying to start", task.GetUid(), "with stdin/stdout")
 		go func() {
 			args.outputChan <- &taskStartedPacket{uid: args.currentUid}
+
 			err := cmd.ExecuteBlocking()
 			fmt.Println("onParallelExecute-anon", task.GetUid(), "Finished with err:", err)
 			args.outputChan <- &taskCompletePacket{uid: args.currentUid}
 		}()
 
 	} else if cmdExists {
+		fmt.Println("onParallelExecute trying to start", task.GetUid(), "without stdin/stdout")
+		args.outputChan <- &taskStartedPacket{uid: args.currentUid}
 		err := cmd.ExecuteBlocking()
 		fmt.Println("onParallelExecute", task.GetUid(), err)
 		args.outputChan <- &taskCompletePacket{uid: args.currentUid}
 	}
-
+	fmt.Println("currentUid", args.currentUid)
 	return nil
 }
 
 func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
-	// close task pipes when task is finished
 	args := wt.Args.(ParallelTaskArgs)
 	node, _ := t.resolver.GetNode(args.currentUid)
 	task, _ := node.(*Task)
 
-	fmt.Println("onParallelComplete", args.currentUid, "Waiting for close signal")
 	inputChan, _ := t.taskChannelMap[task.uid]
-	cmd, _ := t.cmdMap[args.currentUid]
 
+	cmd, _ := t.cmdMap[args.currentUid]
 	go func() {
 		stdinClosed := false
 		stdoutClosed := false
 
 		for !stdinClosed || !stdoutClosed {
+			fmt.Println("onParallelComplete-anon", args.currentUid, "Waiting for close signal")
 			signal := <-inputChan
 			fmt.Println("onParallelComplete-anon", args.currentUid, "signal received", signal)
 			if signal == stdin_msg && !stdinClosed {
-				cmd.inPoint.Close()
-				fmt.Println(task.GetUid(), ": Closing Stdin")
+				err := cmd.CloseStdin()
+				fmt.Println(task.GetUid(), ": Closing Stdin", err)
+				stdinClosed = true
 			}
 			if signal == stdout_msg && !stdoutClosed {
-				cmd.outPoint.Close()
-				fmt.Println(task.GetUid(), ": Closing Stdout")
+				err := cmd.CloseStdout()
+				fmt.Println(task.GetUid(), ": Closing Stdout", err)
+				stdoutClosed = true
 			}
 		}
 		fmt.Println(task.GetUid(), ": All pipes closed")
@@ -451,7 +470,6 @@ func (t *TaskEngine) onParallelComplete(w *wp.Worker, wt *wp.WorkerTask) {
 
 func (t *TaskEngine) onParallelError(w *wp.Worker, wt *wp.WorkerTask, err error) {
 	// Re-queue task if not ready, log error
-
 	switch e := errors.Unwrap(err); e.(type) {
 	case *TaskNotFoundError:
 		fmt.Println(e)

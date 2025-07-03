@@ -189,7 +189,6 @@ func (d *DAGResolver) CountIncomingEdges(nodes []Node) map[string]int {
 			counts[node.GetUid()] = 0
 		}
 	}
-	fmt.Println(counts)
 	return counts
 }
 
