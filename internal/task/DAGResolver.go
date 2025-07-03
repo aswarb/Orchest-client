@@ -81,11 +81,11 @@ func (d *DAGResolver) rebuildSegmentRevIndex() {
 	revIndex := make(map[string](map[string]struct{}))
 	for _, segment := range segments {
 		sUid := segment.GetUid()
-
-		memberUids := segments[sUid].GetMemberUids()
-		for _, nUid := range memberUids {
-			_, exists := revIndex[nUid]
-			if !exists {
+		orderedNodes := d.customKahnsAlgorithm(segment.GetStartUids(), segment.GetEndpointUids())
+		fmt.Println(orderedNodes)
+		for _, node := range orderedNodes {
+			nUid := node.GetUid()
+			if _, exists := revIndex[nUid]; !exists {
 				revIndex[nUid] = make(map[string]struct{})
 			}
 			revIndex[nUid][sUid] = struct{}{}
