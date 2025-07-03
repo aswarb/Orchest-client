@@ -32,6 +32,10 @@ func (p *CmdWrapper) BufferedStdinWrite(data []byte) {
 }
 
 func (p *CmdWrapper) ExecuteBlocking() error {
+	p.cmd.Stderr = os.Stdout
+	if p.cmd.Stdout == nil {
+		p.cmd.Stdout = os.Stdout
+	}
 	err := p.cmd.Run()
 	return err
 }
