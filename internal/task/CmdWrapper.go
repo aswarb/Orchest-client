@@ -6,8 +6,16 @@ import (
 	"fmt"
 	"io"
 	wp "orchest-client/internal/workerpool"
+	"os"
 	"os/exec"
 )
+
+type DummyCloser struct {
+}
+
+func (d *DummyCloser) Close() error                { return nil }
+func (d *DummyCloser) Read(p []byte) (int, error)  { return 0, nil }
+func (d *DummyCloser) Write(p []byte) (int, error) { return 0, nil }
 
 type CmdWrapper struct {
 	cmd             *exec.Cmd
@@ -34,6 +42,7 @@ func (p *CmdWrapper) EnableBuffer(ctx context.Context) {
 
 		p.startStdinConsumer(ctx) // consumer for stdin point -> buffer
 		p.startBufConsumer(ctx)   // consumer for buffer -> true cmd stdin
+		p.bufferEnabled = true
 	}
 }
 
@@ -79,6 +88,10 @@ func (p *CmdWrapper) startBufConsumer(ctx context.Context) {
 }
 
 func (p *CmdWrapper) startStdinConsumer(ctx context.Context) {
+
+	if p.inPoint == nil {
+		return
+	}
 	consumerFuncExecute := func(w *wp.Worker, wt *wp.WorkerTask) error {
 		for {
 			select {
@@ -126,23 +139,40 @@ func (p *CmdWrapper) ClosePipes() error {
 }
 
 func (p *CmdWrapper) CloseStdin() error {
-	e1 := p.inPoint.Close()
-
-	return e1
+	if p.inPoint != nil {
+		fmt.Println("CmdWrapper closing stdin")
+		e1 := p.inPoint.Close()
+		return e1
+	} else {
+		return errors.New("inPoint is nil for cmd")
+	}
 }
-func (p *CmdWrapper) CloseStdout() error {
-	e2 := p.outPoint.Close()
 
-	return e2
+func (p *CmdWrapper) CloseStdout() error {
+	if p.outPoint != nil {
+		fmt.Println("CmdWrapper closing stdout")
+		e2 := p.outPoint.Close()
+		return e2
+	} else {
+		return errors.New("outPoint is nil for cmd")
+	}
 }
 
 func (p *CmdWrapper) CloseBufStdin() error {
-	e3 := p.bufPipeInPoint.Close()
-	return e3
+	if p.bufPipeInPoint != nil {
+		e3 := p.bufPipeInPoint.Close()
+		return e3
+	} else {
+		return errors.New("bufInPoint is nil for cmd")
+	}
 }
 func (p *CmdWrapper) CloseBufStdout() error {
-	e4 := p.bufPipeOutPoint.Close()
-	return e4
+	if p.bufPipeOutPoint != nil {
+		e4 := p.bufPipeOutPoint.Close()
+		return e4
+	} else {
+		return errors.New("bufOutPoint is nil for cmd")
+	}
 }
 func CreateCmdWrapper(executable string, args []string, inPoint io.ReadCloser, outPoint io.WriteCloser) *CmdWrapper {
 	bufReader, bufWriter := io.Pipe()
