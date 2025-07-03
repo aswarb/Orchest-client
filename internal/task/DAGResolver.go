@@ -200,8 +200,7 @@ func (d *DAGResolver) GetSegments(nUid string) (map[string]struct{}, bool) {
 func (d *DAGResolver) GetLinearOrderFromSegment(sUid string) []Node {
 	segment, _ := d.GetSegment(sUid)
 
-	orderedNodes := d.customKahnsAlgorithm(segment.GetMemberUids(), segment.GetEndpointUids())
-	fmt.Println(orderedNodes)
+	orderedNodes := d.customKahnsAlgorithm(segment.GetStartUids(), segment.GetEndpointUids())
 	return orderedNodes
 }
 

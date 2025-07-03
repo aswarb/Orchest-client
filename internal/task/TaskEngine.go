@@ -114,18 +114,22 @@ func (t *TaskEngine) createPipesNew() {
 		fmt.Println("createPipesNew trying to wrap endpoints for", uid)
 		task := node.(*Task)
 		outgoing, outgoingExists := outgoingPipes[uid]
-		if !outgoingExists {
-			continue
+		var outpoint io.WriteCloser
+		fmt.Println("outgoing:", outgoing, outgoingExists, len(outgoing))
+		if outgoingExists && len(outgoing) > 0 {
+			outpoint = outgoing[0]
+		} else {
+			outpoint = nil
 		}
-		outpoint := outgoing[0]
 
 		incoming, incomingExists := incomingPipes[uid]
-		if !incomingExists {
-			continue
+		var inpoint io.ReadCloser
+		fmt.Println("incoming:", incoming, incomingExists, len(incoming))
+		if incomingExists && len(incoming) > 0 {
+			inpoint = incoming[0]
+		} else {
+			inpoint = nil
 		}
-
-		inpoint := incoming[0]
-
 		wrapper := CreateCmdWrapper(task.Executable, task.Args, inpoint, outpoint)
 		wrappedCmds[uid] = wrapper
 	}
