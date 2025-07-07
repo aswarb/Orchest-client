@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
-	mc "orchest-client/internal/multiClosers"
 	wp "orchest-client/internal/workerpool"
 	"slices"
 )
@@ -53,91 +51,6 @@ type TaskEngine struct {
 	taskChannelMap map[string]chan taskCtrlSignal
 }
 
-func (t *TaskEngine) createPipesNew() {
-	incomingPipes := make(map[string][]io.ReadCloser)
-	outgoingPipes := make(map[string][]io.WriteCloser)
-
-	wrappedCmds := make(map[string]*CmdWrapper)
-
-	allNodes := t.resolver.GetLinearOrder()
-	fmt.Println("createPipesNew allNodes", allNodes)
-	for _, node := range allNodes {
-		uid := node.GetUid()
-		fmt.Println("createPipesNew trying to create pipe end for", uid)
-		prevTask := node.(*Task)
-		nextUids := node.GetNext()
-		for _, nUid := range nextUids {
-			nextNode, nextNodeExists := t.resolver.GetNode(nUid)
-			if !nextNodeExists {
-				continue
-			}
-			nextTask := nextNode.(*Task)
-			pipeReader, pipeWriter := io.Pipe()
-			// Assume stdin-stdout pairs have already been validated
-			// Note: this means nothing should take on stdin without at least 1 task pointing to it that gives stdout
-			if nextTask.ReadStdin && prevTask.GiveStdout {
-
-				if _, exists := incomingPipes[nUid]; !exists {
-					incomingPipes[nUid] = []io.ReadCloser{}
-				}
-
-				if _, exists := outgoingPipes[uid]; !exists {
-					outgoingPipes[uid] = []io.WriteCloser{}
-				}
-				fmt.Println("createPipesNew storing pipe ends from ", uid, "to", nUid)
-				incomingPipes[nUid] = append(incomingPipes[nUid], pipeReader)
-				outgoingPipes[uid] = append(outgoingPipes[uid], pipeWriter)
-			}
-		}
-	}
-
-	for _, node := range allNodes {
-		uid := node.GetUid()
-
-		fmt.Println("createPipesNew Getting pipe ends for ", uid)
-		fmt.Println("incomingPipes:", incomingPipes)
-		incoming, _ := incomingPipes[uid]
-		fmt.Println("outgoingPipes:", outgoingPipes)
-		outgoing, _ := outgoingPipes[uid]
-		if len(incoming) > 1 {
-			fmt.Println("createPipesNew binding many incoming ends for ", uid)
-			incomingPipes[uid] = []io.ReadCloser{mc.MakeMultiReadCloser(incoming...)}
-		}
-		if len(outgoing) > 1 {
-			fmt.Println("createPipesNew binding many outgoing ends for ", uid)
-			outgoingPipes[uid] = []io.WriteCloser{mc.MakeMultiWriteCloser(outgoing...)}
-		}
-	}
-
-	for _, node := range allNodes {
-		uid := node.GetUid()
-		fmt.Println("createPipesNew trying to wrap endpoints for", uid)
-		task := node.(*Task)
-		outgoing, outgoingExists := outgoingPipes[uid]
-		var outpoint io.WriteCloser
-		fmt.Println("outgoing:", outgoing, outgoingExists, len(outgoing))
-		if outgoingExists && len(outgoing) > 0 {
-			outpoint = outgoing[0]
-		} else {
-			outpoint = nil
-		}
-
-		incoming, incomingExists := incomingPipes[uid]
-		var inpoint io.ReadCloser
-		fmt.Println("incoming:", incoming, incomingExists, len(incoming))
-		if incomingExists && len(incoming) > 0 {
-			inpoint = incoming[0]
-		} else {
-			inpoint = nil
-		}
-		wrapper := CreateCmdWrapper(task.Executable, task.Args, inpoint, outpoint)
-		wrappedCmds[uid] = wrapper
-	}
-	t.cmdMap = wrappedCmds
-	fmt.Println(wrappedCmds)
-
-}
-
 type statusUpdate struct {
 	uid      string
 	started  bool
@@ -151,7 +64,6 @@ const (
 )
 
 func (t *TaskEngine) ExecuteTasksInOrder(ctx context.Context) {
-	t.createPipesNew()
 	t.executeParallelTask(ctx)
 }
 
