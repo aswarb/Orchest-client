@@ -36,7 +36,6 @@ func GetTask(uid string, name string, executable string, args []string, timeout 
 	}
 
 	task := Task{
-
 		uid:        uid,
 		Name:       name,
 		Executable: executable,
