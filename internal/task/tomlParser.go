@@ -8,30 +8,6 @@ import (
 	"regexp"
 )
 
-type TomlSegment interface {
-	GetUid() string
-	GetStartingUids() []string
-	GetEndingUids() []string
-	ToString() string
-}
-
-type ParallelTomlSegment struct {
-	Uid       string   `toml:"uid"`
-	Name      string   `toml:"name"`
-	StartUids []string `toml:"startMembers"`
-	EndUids   []string `toml:"endMembers"`
-}
-
-func (t *ParallelTomlSegment) GetUid() string            { return t.Uid }
-func (t *ParallelTomlSegment) GetStartingUids() []string { return t.StartUids }
-func (t *ParallelTomlSegment) GetEndingUids() []string   { return t.EndUids }
-func (t *ParallelTomlSegment) ToString() string {
-	template, _ := taskTemplate.GetTemplate(taskTemplate.PARALLEL_SEGMENT)
-	fmt.Println(template)
-	return string(template)
-
-}
-
 type TomlTask interface {
 	GetUid() string
 	GetNext() []string
@@ -59,11 +35,11 @@ func (t *SingleTomlTask) ToString() string {
 
 }
 
-func GetTomlTaskArray(path string) ([]TomlTask, []TomlSegment) {
+func GetTomlTaskArray(path string) []TomlTask {
 	data, _ := os.ReadFile(path)
 	fileContents := string(data)
 
-	TableHeaderPattern, _ := regexp.Compile(`\[\[(Task|Parallel)\]\]`)
+	TableHeaderPattern, _ := regexp.Compile(`\[\[Task\]\]`)
 	indices := TableHeaderPattern.FindAllStringIndex(fileContents, -1)
 
 	blobs := make(map[string][]string)
@@ -83,7 +59,6 @@ func GetTomlTaskArray(path string) ([]TomlTask, []TomlSegment) {
 	}
 
 	tasks := []TomlTask{}
-	segments := []TomlSegment{}
 	for k, _ := range blobs {
 		for _, blob := range blobs[k] {
 			switch k {
@@ -94,11 +69,6 @@ func GetTomlTaskArray(path string) ([]TomlTask, []TomlSegment) {
 				tasks = append(tasks, &holder)
 
 				//fmt.Println("----")
-			case "[[Parallel]]":
-				var holder ParallelTomlSegment
-				_, _ = toml.Decode(blob, &holder)
-				//fmt.Println(blob)
-				segments = append(segments, &holder)
 			default:
 				continue
 			}
@@ -107,8 +77,5 @@ func GetTomlTaskArray(path string) ([]TomlTask, []TomlSegment) {
 	for _, t := range tasks {
 		fmt.Println(t)
 	}
-	for _, s := range segments {
-		fmt.Println(s)
-	}
-	return tasks, segments
+	return tasks
 }

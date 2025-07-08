@@ -194,13 +194,12 @@ func main() {
 	wd, _ := os.Getwd()
 	tomlPath := fmt.Sprintf("%s%s", wd, "/internal/task/TEMPLATE_test6.orchest.task.toml")
 	fmt.Println(tomlPath)
-	tasks, segments := task.GetTomlTaskArray(tomlPath)
+	tasks := task.GetTomlTaskArray(tomlPath)
 	fmt.Println("TomlTasks:", tasks)
-	fmt.Println("TomlSegments:", segments)
 	for _, task := range tasks {
 		fmt.Println(task)
 	}
-	taskManager := task.GetTaskManagerFromToml(tasks, segments)
+	taskManager := task.GetTaskManagerFromToml(tasks)
 	fmt.Println(taskManager)
 	taskManager.StartTask(ctx)
 

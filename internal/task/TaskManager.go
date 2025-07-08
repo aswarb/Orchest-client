@@ -32,7 +32,6 @@ func (t *TaskManager) StartTask(ctx context.Context) {
 
 func GetTaskManagerFromToml(sourceTasks []TomlTask, sourceSegments []TomlSegment) *TaskManager {
 	tasks := []Node{}
-	segments := []Segment{}
 	for _, target := range sourceTasks {
 		switch target.(type) {
 		case *SingleTomlTask:
@@ -52,25 +51,14 @@ func GetTaskManagerFromToml(sourceTasks []TomlTask, sourceSegments []TomlSegment
 		}
 	}
 
-	for _, target := range sourceSegments {
-		switch target.(type) {
-		case *ParallelTomlSegment:
-			fmt.Println(target)
-			s := target.(*ParallelTomlSegment)
-			fmt.Println("createTaskManager:", s.EndUids)
-			segment := GetParallelSegment(s.Uid,
-				s.Name,
-				s.StartUids,
-				s.EndUids)
-			segments = append(segments, segment)
-		default:
-			continue
-		}
+	resolver := MakeDAGResolver(tasks)
+	scheduler := CreateTaskScheduler(resolver.CountIncomingEdges(nil))
+	executor := CreateTaskExecutor()
+	manager := TaskManager{
+		resolver:  resolver,
+		scheduler: scheduler,
+		executor:  executor,
 	}
-
-	resolver := MakeDAGResolver(tasks, segments)
-	engine := GetTaskEngine(resolver)
-	manager := TaskManager{engine: engine, resolver: resolver}
 
 	return &manager
 }

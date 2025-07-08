@@ -13,28 +13,13 @@ type Node interface {
 	SetNextUids([]string)
 }
 
-type Segment interface {
-	GetUid() string
-	GetStartUids() []string
-	GetEndpointUids() []string
-	AddStartUid(string)
-	AddEndUid(string)
-	SetStartUids([]string)
-	SetEndUids([]string)
-}
-
-func MakeDAGResolver(nodes []Node, segments []Segment) *DAGResolver {
+func MakeDAGResolver(nodes []Node) *DAGResolver {
 	resolver := DAGResolver{
-		nodeMap:       make(map[string]Node),
-		revIndex:      make(map[string][]Node),
-		segmentMap:    make(map[string]Segment),
-		segmentRevMap: make(map[string]map[string]struct{}),
+		nodeMap:  make(map[string]Node),
+		revIndex: make(map[string][]Node),
 	}
 	for _, node := range nodes {
 		resolver.AddNode(node)
-	}
-	for _, segment := range segments {
-		resolver.AddSegment(segment)
 	}
 	resolver.RefreshTables()
 
@@ -42,14 +27,11 @@ func MakeDAGResolver(nodes []Node, segments []Segment) *DAGResolver {
 }
 
 type DAGResolver struct {
-	nodeMap       map[string]Node                //node.Uid -> Node
-	revIndex      map[string][]Node              //node.Uid -> incoming Node
-	segmentMap    map[string]Segment             //segment.Uid -> Segment
-	segmentRevMap map[string]map[string]struct{} //Node.Uid -> set(segment.Uid)
+	nodeMap  map[string]Node   //node.Uid -> Node
+	revIndex map[string][]Node //node.Uid -> incoming Node
 }
 
-func (d *DAGResolver) AddNode(n Node)       { d.nodeMap[n.GetUid()] = n }
-func (d *DAGResolver) AddSegment(s Segment) { d.segmentMap[s.GetUid()] = s }
+func (d *DAGResolver) AddNode(n Node) { d.nodeMap[n.GetUid()] = n }
 
 func (d *DAGResolver) GetNode(uid string) (Node, bool) {
 	val, ok := d.nodeMap[uid]
@@ -61,11 +43,6 @@ func (d *DAGResolver) NodeExists(uid string) bool {
 	return ok
 }
 
-func (d *DAGResolver) GetSegment(uid string) (Segment, bool) {
-	val, ok := d.segmentMap[uid]
-	return val, ok
-}
-
 func (d *DAGResolver) GetNextUid(uid string) []string {
 	node, ok := d.GetNode(uid)
 
@@ -74,24 +51,6 @@ func (d *DAGResolver) GetNextUid(uid string) []string {
 	} else {
 		return node.GetNext()
 	}
-}
-
-func (d *DAGResolver) rebuildSegmentRevIndex() {
-	segments := d.getSegmentMap()
-	revIndex := make(map[string](map[string]struct{}))
-	for _, segment := range segments {
-		sUid := segment.GetUid()
-		orderedNodes := d.customKahnsAlgorithm(segment.GetStartUids(), segment.GetEndpointUids())
-		fmt.Println(orderedNodes)
-		for _, node := range orderedNodes {
-			nUid := node.GetUid()
-			if _, exists := revIndex[nUid]; !exists {
-				revIndex[nUid] = make(map[string]struct{})
-			}
-			revIndex[nUid][sUid] = struct{}{}
-		}
-	}
-	d.segmentRevMap = revIndex
 }
 
 func (d *DAGResolver) rebuildRevIndex() {
@@ -111,12 +70,10 @@ func (d *DAGResolver) rebuildRevIndex() {
 }
 
 func (d *DAGResolver) RefreshTables() {
-	d.rebuildSegmentRevIndex()
 	d.rebuildRevIndex()
 }
 
-func (d *DAGResolver) GetNodeMap() map[string]Node       { return d.nodeMap }
-func (d *DAGResolver) getSegmentMap() map[string]Segment { return d.segmentMap }
+func (d *DAGResolver) GetNodeMap() map[string]Node { return d.nodeMap }
 
 func (d *DAGResolver) GetIncomingNodes(uid string) ([]Node, bool) {
 	nodes, ok := d.revIndex[uid]
@@ -190,18 +147,6 @@ func (d *DAGResolver) CountIncomingEdges(nodes []Node) map[string]int {
 		}
 	}
 	return counts
-}
-
-func (d *DAGResolver) GetSegments(nUid string) (map[string]struct{}, bool) {
-	segments, ok := d.segmentRevMap[nUid]
-	return segments, ok
-}
-
-func (d *DAGResolver) GetLinearOrderFromSegment(sUid string) []Node {
-	segment, _ := d.GetSegment(sUid)
-
-	orderedNodes := d.customKahnsAlgorithm(segment.GetStartUids(), segment.GetEndpointUids())
-	return orderedNodes
 }
 
 func (d *DAGResolver) GetLinearOrder() []Node {
