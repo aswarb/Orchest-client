@@ -2,7 +2,6 @@ package task
 
 import (
 	"context"
-	"fmt"
 )
 
 func FilterMap[K comparable, V any](m map[K]V, isValid func(K, V) bool) map[K]V {

@@ -5,6 +5,11 @@ import (
 	"os/exec"
 )
 
+func CreateTaskExecutor() *TaskExecutor {
+	buckets := make(map[string][]byte)
+	return &TaskExecutor{buckets: buckets}
+}
+
 type TaskExecutor struct {
 	buckets map[string][]byte
 }
@@ -18,7 +23,7 @@ func (t *TaskExecutor) PushToBucket(id string, input []byte) {
 	}
 }
 
-func (t *TaskExecutor) ExecuteTask(task Task, nextTasks []Task) int {
+func (t *TaskExecutor) ExecuteTask(task *Task, nextTasks []*Task) int {
 	var cmdInReader, manualOutReader io.ReadCloser
 	var manualInWriter, cmdOutWriter io.WriteCloser
 
