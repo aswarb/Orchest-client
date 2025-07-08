@@ -52,7 +52,6 @@ func (t *TaskManager) StartTask(ctx context.Context) error {
 	return err
 }
 
-// Broken until TaskManager implementation is finished again
 func GetTaskManagerFromToml(sourceTasks []TomlTask) *TaskManager {
 	tasks := []Node{}
 	for _, target := range sourceTasks {
