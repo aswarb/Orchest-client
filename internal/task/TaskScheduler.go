@@ -5,6 +5,21 @@ import (
 	"maps"
 )
 
+func CreateTaskScheduler(inDegreeMap map[string]int) *TaskScheduler {
+
+	originalMap := inDegreeMap
+	newMap := make(map[string]int)
+	maps.Copy(newMap, inDegreeMap)
+
+	s := TaskScheduler{
+		originalCountMap: originalMap,
+		currentCountMap:  newMap,
+		zeroDegreeIds:    []string{},
+	}
+
+	return &s
+}
+
 type TaskScheduler struct {
 	originalCountMap map[string]int
 	currentCountMap  map[string]int
