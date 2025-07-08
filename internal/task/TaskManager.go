@@ -28,8 +28,9 @@ type TaskManager struct {
 
 func (t *TaskManager) StartTask(ctx context.Context) error {
 	var err error
+	var taskId string
 	for err != nil {
-		taskId, err := t.scheduler.GetNext()
+		taskId, err = t.scheduler.GetNext()
 		if err != nil {
 			return err
 		}
