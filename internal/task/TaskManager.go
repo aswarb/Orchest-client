@@ -48,15 +48,13 @@ func (t *TaskManager) StartTask(ctx context.Context) error {
 			t.scheduler.MarkDone(task.GetUid(), task.GetNext())
 		}
 	}
-	return err
 }
 
 func GetTaskManagerFromToml(sourceTasks []TomlTask) *TaskManager {
 	tasks := []Node{}
 	for _, target := range sourceTasks {
-		switch target.(type) {
+		switch t := target.(type) {
 		case *SingleTomlTask:
-			t := target.(*SingleTomlTask)
 			task := GetTask(t.Uid,
 				t.Name,
 				t.Command,
