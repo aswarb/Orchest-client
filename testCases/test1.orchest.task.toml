@@ -1,0 +1,77 @@
+[[Task]]
+uid = "01"
+name = "input"
+command = "/usr/bin/notify-send"
+args = ["1"]
+timeout = 3000
+delay = 200
+next = ["02"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "02"
+name = "input"
+command = "/usr/bin/notify-send"
+args = ["2"]
+timeout = 3000
+delay = 200
+next = ["03", "04"]
+givestdout = true
+readstdin = false
+
+
+[[Task]]
+uid = "03"
+name = "input"
+command = "/usr/bin/notify-send"
+args = ["3"]
+timeout = 3000
+delay = 200
+next = ["05"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "04"
+name = "input"
+command = "/usr/bin/notify-send"
+args = ["4"]
+timeout = 3000
+delay = 200
+next = ["06"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "05"
+name = "input"
+command = "/usr/bin/notify-send"
+args = ["5"]
+timeout = 3000
+delay = 200
+next = ["07"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "06"
+name = "input"
+command = "/usr/bin/notify-send"
+args = ["6"]
+timeout = 3000
+delay = 200
+next = ["07"]
+givestdout = true
+readstdin = false
+
+[[Task]]
+uid = "07"
+name = "input"
+command = "/usr/bin/notify-send"
+args = ["7"]
+timeout = 3000
+delay = 200
+next = [""]
+givestdout = true
+readstdin = false

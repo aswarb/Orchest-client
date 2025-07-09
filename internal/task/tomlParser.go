@@ -38,9 +38,8 @@ func GetTomlTaskArray(path string) []TomlTask {
 	data, _ := os.ReadFile(path)
 	fileContents := string(data)
 
-	TableHeaderPattern, _ := regexp.Compile(`\[\[Task\]\]`)
+	TableHeaderPattern, _ := regexp.Compile(`\[\[(Task)\]\]`)
 	indices := TableHeaderPattern.FindAllStringIndex(fileContents, -1)
-
 	blobs := make(map[string][]string)
 	for num, pair := range indices {
 		var blob string
