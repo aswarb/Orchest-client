@@ -1,8 +1,10 @@
 package task
 
 import (
+	"fmt"
 	"io"
 	"os/exec"
+	"time"
 )
 
 func CreateTaskExecutor() *TaskExecutor {
@@ -74,6 +76,9 @@ func (t *TaskExecutor) ExecuteTask(task *Task, nextTasks []*Task) int {
 		go exhaustStdout(manualOutReader, allBuckets)
 	}
 
+	fmt.Println("Starting Delay for Task", task.GetUid(), " of ", task.Delay, " Milliseconds")
+	time.Sleep(time.Duration(task.Delay) * time.Millisecond)
+	fmt.Println("Starting Task", task.GetUid())
 	cmd.Run()
 
 	return 0
