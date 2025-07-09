@@ -11,6 +11,8 @@ func CreateTaskScheduler(inDegreeMap map[string]int) *TaskScheduler {
 	newMap := make(map[string]int)
 	maps.Copy(newMap, inDegreeMap)
 
+	fmt.Println(inDegreeMap)
+
 	s := TaskScheduler{
 		originalCountMap: originalMap,
 		currentCountMap:  newMap,

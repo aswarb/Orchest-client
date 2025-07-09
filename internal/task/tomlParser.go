@@ -30,7 +30,6 @@ func (t *SingleTomlTask) GetUid() string    { return t.Uid }
 func (t *SingleTomlTask) GetNext() []string { return t.Next }
 func (t *SingleTomlTask) ToString() string {
 	template, _ := taskTemplate.GetTemplate(taskTemplate.SINGLE_TASK)
-	fmt.Println(template)
 	return string(template)
 
 }
@@ -65,10 +64,8 @@ func GetTomlTaskArray(path string) []TomlTask {
 			case "[[Task]]":
 				var holder SingleTomlTask
 				_, _ = toml.Decode(blob, &holder)
-				//fmt.Println(blob)
 				tasks = append(tasks, &holder)
 
-				//fmt.Println("----")
 			default:
 				continue
 			}
