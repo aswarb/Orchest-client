@@ -73,12 +73,20 @@ func (t *TaskExecutor) ExecuteTask(task *Task, nextTasks []*Task) int {
 		if bucket, bucketExists := t.buckets[nUid]; bucketExists {
 			allBuckets = append(allBuckets, bucket)
 		}
+
 		go exhaustStdout(manualOutReader, allBuckets)
 	}
 
+	timeout_func := func(time_ms int, cmd *exec.Cmd) {
+		time.Sleep(time.Duration(time_ms) * time.Millisecond)
+		if !cmd.ProcessState.Exited() {
+			cmd.Process.Kill()
+		}
+	}
 	fmt.Println("Starting Delay for Task", task.GetUid(), " of ", task.Delay, " Milliseconds")
 	time.Sleep(time.Duration(task.Delay) * time.Millisecond)
 	fmt.Println("Starting Task", task.GetUid())
+	go timeout_func(int(task.Timeout), cmd)
 	cmd.Run()
 
 	return 0
