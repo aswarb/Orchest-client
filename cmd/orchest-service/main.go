@@ -7,7 +7,7 @@ import (
 	"net"
 	"net/http"
 	"orchest-client/internal/api"
-	"orchest-client/internal/task"
+	
 	"os"
 	"os/signal"
 	"strconv"
@@ -191,18 +191,6 @@ func main() {
 			}
 		}
 	}()
-	wd, _ := os.Getwd()
-	tomlPath := fmt.Sprintf("%s%s", wd, "/testCases/test1.orchest.task.toml")
-	fmt.Println(tomlPath)
-	tasks := task.GetTomlTaskArray(tomlPath)
-	fmt.Println("TomlTasks:", tasks)
-	for _, task := range tasks {
-		fmt.Println("Task:", task)
-	}
-	taskManager := task.GetTaskManagerFromToml(tasks)
-	fmt.Println(taskManager)
-	taskErr := taskManager.StartTask(ctx)
-	fmt.Println(taskErr)
 	<-sigChan
 	fmt.Println("Shutdown signal received. Cleaning up...")
 	cancelFunc()
