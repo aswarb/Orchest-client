@@ -7,7 +7,7 @@ import (
 	"net"
 	"net/http"
 	"orchest-client/internal/api"
-	
+
 	"os"
 	"os/signal"
 	"strconv"
@@ -177,6 +177,8 @@ func main() {
 	udpListener := api.GetUdpListener(ctx, ipParts[0], 1026, 5, outputChan, errorChannel)
 	udpListener.OpenConnection()
 
+	host, _ := os.Hostname()
+	fmt.Println("Starting mdns broastcast on ", host)
 	go func() {
 		for {
 			select {
