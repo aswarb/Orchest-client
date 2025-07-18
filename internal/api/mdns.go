@@ -5,16 +5,28 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 )
 
+type IPType int
+
+// could use iota, using 4 and 6 here is clearer though
+const (
+	IPv4 IPType = 4
+	IPv6 IPType = 6
+)
+
 type MdnsResult struct {
+	Iface    *net.Interface
 	Instance string
 	Service  string
 	Domain   string
 	Hostname string
+	IP       net.IP
 	Port     int
-	IPs      []net.IP
+	IPType   IPType
 	Txt      []string
 }
 
@@ -43,8 +55,9 @@ func (q *AvahiQuery) Start() (chan *MdnsResult, error) {
 		q.mu.Unlock()
 		return q.resultsChan, nil
 	}
+	// Remake channel so it can be used to signal data is finished for synchronous fetching of data from this async function
+	q.resultsChan = make(chan *MdnsResult, 10)
 	q.mu.Unlock()
-
 	execStr := "avahi-browse"
 	args := []string{"-arpt"}
 	queryCmd := exec.Command(execStr, args...)
@@ -58,7 +71,46 @@ func (q *AvahiQuery) Start() (chan *MdnsResult, error) {
 	parseStdout := func() {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
-			fmt.Println(scanner.Text())
+			line := scanner.Text()
+
+			start := string(line[0])
+			if start != "=" {
+				continue
+			}
+			lineParts := strings.Split(line, ";")
+
+			ifacestr := lineParts[1]
+			iptypestr := lineParts[2]
+			instanceName := lineParts[3]
+			service := lineParts[4]
+			domain := lineParts[5]
+			hostname := lineParts[6]
+			address := lineParts[7]
+			portstr := lineParts[8]
+			txt := lineParts[9:]
+
+			iface, err := net.InterfaceByName(ifacestr)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			var addressType IPType
+			switch iptypestr {
+			case "IPv4":
+				addressType = IPv4
+			case "IPv6":
+				addressType = IPv6
+			}
+
+			port, err := strconv.ParseInt(portstr, 10, 32)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			entry := MakeMdnsResult(iface, instanceName, service, domain, hostname, int(port), net.ParseIP(address), addressType, txt)
+			fmt.Println(entry)
+			q.resultsChan <- entry
 		}
 		fmt.Println("Scanner finished")
 		q.Stop()
@@ -69,6 +121,7 @@ func (q *AvahiQuery) Start() (chan *MdnsResult, error) {
 		queryCmd.Process.Kill()
 
 		q.mu.Lock()
+		close(q.resultsChan)
 		q.isRunning = false
 		q.mu.Unlock()
 	}
@@ -97,8 +150,14 @@ func (q *AvahiQuery) Stop() {
 	}
 }
 
-func (q *AvahiQuery) GetResultsChan() <-chan *MdnsResult {
-	return q.resultsChan
+func (q *AvahiQuery) GetResultsChan() (<-chan *MdnsResult, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.isRunning {
+		return q.resultsChan, nil
+	} else {
+		return nil, fmt.Errorf("Channel is not open. Start query to create an open channel")
+	}
 }
 
 func MakeAvahiQuery(instanceSubstr string, serviceSubstr string, domainSubstr string, hostnameSubstr string) *AvahiQuery {
@@ -116,14 +175,16 @@ func MakeAvahiQuery(instanceSubstr string, serviceSubstr string, domainSubstr st
 	return &q
 }
 
-func MakeMdnsResult(Instance string, Service string, Domain string, Hostname string, Port int, IPs []net.IP, Txt []string) *MdnsResult {
+func MakeMdnsResult(Iface *net.Interface, Instance string, Service string, Domain string, Hostname string, Port int, IP net.IP, IPType IPType, Txt []string) *MdnsResult {
 	r := MdnsResult{
+		Iface:    Iface,
 		Instance: Instance,
 		Service:  Service,
 		Domain:   Domain,
 		Hostname: Hostname,
 		Port:     Port,
-		IPs:      IPs,
+		IP:       IP,
+		IPType:   IPType,
 		Txt:      Txt,
 	}
 	return &r
