@@ -89,6 +89,19 @@ func (q *AvahiQuery) Start() (chan *MdnsResult, error) {
 			portstr := lineParts[8]
 			txt := lineParts[9:]
 
+			if q.instanceSubstr != "" && !strings.Contains(instanceName, q.instanceSubstr) {
+				continue
+			}
+			if q.serviceSubstr != "" && !strings.Contains(service, q.serviceSubstr) {
+				continue
+			}
+			if q.domainSubstr != "" && !strings.Contains(domain, q.domainSubstr) {
+				continue
+			}
+			if q.hostnameSubstr != "" && !strings.Contains(hostname, q.hostnameSubstr) {
+				continue
+			}
+
 			iface, err := net.InterfaceByName(ifacestr)
 			if err != nil {
 				fmt.Println(err)
