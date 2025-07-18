@@ -177,6 +177,10 @@ func main() {
 	udpListener := api.GetUdpListener(ctx, ipParts[0], 1026, 5, outputChan, errorChannel)
 	udpListener.OpenConnection()
 
+	mdnsQuery := api.MakeAvahiQuery("","","","")
+
+	mdnsQuery.Start()
+
 	host, _ := os.Hostname()
 	fmt.Println("Starting mdns broastcast on ", host)
 	go func() {
@@ -194,6 +198,7 @@ func main() {
 		}
 	}()
 	<-sigChan
+	mdnsQuery.Stop()
 	fmt.Println("Shutdown signal received. Cleaning up...")
 	cancelFunc()
 
