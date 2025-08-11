@@ -1,0 +1,9 @@
+[gateway]
+port = 8080
+
+[services]
+[services.gateway]
+port = 8080
+[services.files]
+port = 8081  
+dirs = ["~/temp"]
