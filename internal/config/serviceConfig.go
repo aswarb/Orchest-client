@@ -6,19 +6,34 @@ import (
 	"os"
 )
 
-type GatewayConfig struct {
-	Port int `toml:"port"`
-}
+type (
+	Config struct {
+		Gateway  Gateway
+		Services map[string]Service
+	}
 
-func GetGatewayConfig() (*GatewayConfig, error) {
-	path := fmt.Sprintf("%s%s", GetConfigPath(), SERVICE_CONFIGNAME)
+	Gateway struct {
+		Port int `toml:"port"`
+	}
 
-	blob, err := os.ReadFile(path)
+	Service struct {
+		Port int `toml:"port"`
+	}
+)
 
+func GetGatewayConfig() (*Config, error) {
+	configPath, err := GetConfigPath()
 	if err != nil {
 		return nil, err
 	}
-	var conf GatewayConfig
+	path := fmt.Sprintf("%s/%s", configPath, SERVICE_CONFIGNAME)
+
+	blob, err := os.ReadFile(path)
+	fmt.Println(err)
+	if err != nil {
+		return nil, err
+	}
+	var conf Config
 	_, err = toml.Decode(string(blob), &conf)
 
 	return &conf, err
