@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"orchest-client/internal/api"
 	"os"
 	"os/signal"
@@ -136,23 +134,6 @@ func main() {
 		validIfaces = append(validIfaces, iface)
 	}
 
-	defualtHandleEndpoint := func(w http.ResponseWriter, r *http.Request) (bool, []byte) {
-		bytes, e := io.ReadAll(r.Body)
-		fmt.Println(string(bytes))
-		fmt.Println(e)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"message":"orchest API is live!"}`)
-		return true, bytes
-	}
-
-	httpEndpoints := [...]api.HttpEndpoint{
-		api.HttpEndpoint{
-			RelativePath: "/orchest/api",
-			Handler:      defualtHandleEndpoint,
-		},
-	}
-
 	addrs, _ := validIfaces[0].Addrs()
 	ipParts := strings.Split(addrs[0].String(), "/")
 
@@ -167,9 +148,11 @@ func main() {
 	errorChannel := make(chan error, 1000)
 	outputChan := make(chan api.NetMessage, 1000)
 
-	httpListener := api.GetHttpListener(ctx, "127.0.0.1", 1024, httpEndpoints[:], outputChan, errorChannel)
-	httpListener.OpenConnection()
-
+	httpListener, getListenerErr := GetLocalhostAPI(ctx, outputChan, errorChannel)
+	if getListenerErr == nil {
+		fmt.Println("Trying to start http listener")
+		httpListener.OpenConnection()
+	}
 	tcpListener := api.GetTcpListener(ctx, ipParts[0], 1025, 5, outputChan, errorChannel)
 	tcpListener.OpenConnection()
 
