@@ -58,7 +58,15 @@ type HttpEndpoint struct {
 	Handler      func(http.ResponseWriter, *http.Request) (bool, []byte)
 }
 
-func GetHttpListener(ctx context.Context, ipAddr string, port uint, endpoints []HttpEndpoint, outputChan chan NetMessage, errChan chan error) Listener {
+func (h HttpEndpoint) PathMatches(path string) bool {
+	return h.RelativePath == path
+}
+
+func MakeHTTPEndpoint(relativePath string, handlerFunc func(http.ResponseWriter, *http.Request) (bool, []byte)) HttpEndpoint {
+	return HttpEndpoint{RelativePath: relativePath, Handler: handlerFunc}
+}
+
+func GetHttpListener(ctx context.Context, ipAddr string, port uint, endpoints []HttpEndpoint, outputChan chan NetMessage, errChan chan error) *HttpListener {
 	thisCtx, cancelFunc := context.WithCancel(ctx)
 	mux := http.NewServeMux()
 
