@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 )
+
+type HandlerFunc func(http.ResponseWriter, *http.Request)
 
 type HttpListener struct {
 	BaseListener
@@ -20,19 +21,10 @@ func (listener *HttpListener) OpenConnection() {
 	for _, endpoint := range listener.endpoints {
 		handleFunc := func(writer http.ResponseWriter, request *http.Request) {
 			fmt.Println(request)
-			shouldOutput, outputvalue := endpoint.Handler(writer, request)
-			if shouldOutput {
-				listener.outputChannel <- NetMessage{
-					data:      outputvalue,
-					protocol:  HTTP,
-					timestamp: time.Now(),
-					origin:    request.RemoteAddr,
-				}
-			}
+			endpoint.Handler(writer, request)
 		}
-		listener.mux.HandleFunc(fmt.Sprintf("%s", endpoint.RelativePath), handleFunc)
+		listener.mux.HandleFunc(endpoint.RelativePath, handleFunc)
 		fmt.Printf("Listening on http://%s:%d%s\n", listener.localAddr, listener.port, endpoint.RelativePath)
-
 	}
 
 	go func() {
@@ -55,14 +47,14 @@ func (listener *HttpListener) ForceCloseConnection() {
 
 type HttpEndpoint struct {
 	RelativePath string
-	Handler      func(http.ResponseWriter, *http.Request) (bool, []byte)
+	Handler      HandlerFunc
 }
 
 func (h HttpEndpoint) PathMatches(path string) bool {
 	return h.RelativePath == path
 }
 
-func MakeHTTPEndpoint(relativePath string, handlerFunc func(http.ResponseWriter, *http.Request) (bool, []byte)) HttpEndpoint {
+func MakeHTTPEndpoint(relativePath string, handlerFunc HandlerFunc) HttpEndpoint {
 	return HttpEndpoint{RelativePath: relativePath, Handler: handlerFunc}
 }
 
